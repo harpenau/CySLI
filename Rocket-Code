@@ -1,3 +1,9 @@
+//formatting rules:
+//do{ OR do
+//	 {
+//comments above or at the end
+//comments for everything
+
 #include "I2Cdev.h"
 #include "MPU6050.h"
 #include "Wire.h"

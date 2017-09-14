@@ -66,7 +66,7 @@ Format functions
 */
 
 void setup() {
-  //Serial.println("Init!");
+  
   mpuSetup();
   bmpSetup();
   serialSetup();
@@ -106,15 +106,11 @@ if(launchDetect==0){// this is probably redundant in the function, we could take
 (TimeOfLaunch)=LaunchDetection(&launchDetect);
 }
 
-//Serial.print("Time of Launch:");
-//Serial.println(TimeOfLaunch);
+
 T=millis(); // this is needed to distinguish from time in brakingloop
 TimeSinceLaunch=T-TimeOfLaunch;  
 //delay(4000);////////////////////////////////////////////////////////
-//Serial.print("Time in ms since Launch:");
-//Serial.println(TimeSinceLaunch);
-//Serial.print("Current Arduino Time:");
-//Serial.println(T);
+
 PoweredTime=2300; 						//<-------------------------------------------------------------------------------------------------Probably change this number
 
 BrakingLoop(TimeSinceLaunch,PoweredTime,&BT);
@@ -125,30 +121,18 @@ getAcc(); 		// Updates accX,accY,accZ
 getAlt(); 		// Updates altitude
 
 
-//Serial.print("Starting P value:");
-//Serial.println(PnextAx);
-(Ax)=kalman(accX,    Xprev,   &PnextAx); 
-//Serial.print("Ax:");
-//Serial.println(Ax);
 
-//Serial.print("Starting PALT value:");
-//Serial.println(PnextALT);
+(Ax)=kalman(accX,    Xprev,   &PnextAx); 
+
 
 (alt_refine)=kalman(altitude,alt_prev, &PnextALT); 
-	
-//Serial.print("Altrefine:");
-//Serial.println(alt_refine);
 
 //Slope Velocity from BMP
 slopeVelocity=SlopeVelocity(OldTime,time,alt_prev,alt_refine);
-//Serial.print("SlopeVelocity:");
-//Serial.println(slopeVelocity);
+
 
 // integration to for Velocity
-//Serial.println(Xprev);
-//Serial.println(accX);
-//Serial.println(OldTime);
-//Serial.println(time);
+
 
 VelocityNew=integrate(OldTime,time,Xprev,Ax);
 OldVelocity=Velocity;
@@ -176,14 +160,13 @@ ALTREFINE=alt_refine;
 H1=1500;   //these are the heights that we will start the braking //Probably change these<-------------------------------------------------------------
 H2=2400;
 H3=2750;
-//Serial.println(ALTREFINE);
+
 //slopeVelocity=300;//////////////////////////////////////////////////
 if (TimeSinceLaunch>PoweredTime){
 BT=ApogeeCall(ALTREFINE,H1,H2,H3,slopeVelocity,&Brake1,&Brake2,&Brake3);
 RollControl();
 } //<-----------------------------------------------------------------------------------------Delete this?
-//Serial.print("BT: ");
-//Serial.println(BT);
+
 
 FreefallDetection(accX,accY,Brake3);// Freefall
  
@@ -319,7 +302,7 @@ void servoSetup(){
 void closeServo(){
 	if (pos>0){
   do{
-	//Serial.println(pos);
+	
 	pos -= 10;
 	//140degree                      // in steps of 5 degree 
 	servo.write(pos);              // tell servo to go to position in variable 'pos' 
@@ -335,7 +318,7 @@ void closeServo(){
 void openServo(){
 if (pos<200){
  do{
-	//Serial.println(pos);
+	
 	pos += 10;
 	//140degree                      // in steps of 5 degree 
 	servo.write(pos);              // tell servo to go to position in variable 'pos' 
@@ -461,8 +444,7 @@ void mpuSetup(){
 double kalman(double UnFV,double FR1,double *Pold){
 
 /* function filtering results in real time with Kalman filter */
-//Serial.println("Kalnam function initialized...");
-//Serial.println(UnFV,FR1,*Pold);
+
 	int A=1,un=0,H=1,B=0;
 	double Prediction,P,y,S,K,FR2;
 
@@ -497,18 +479,16 @@ double kalman(double UnFV,double FR1,double *Pold){
 double ApogeeCall(double ALTREFINE,int H1, int H2, int H3, double V,int *Brake1, int *Brake2,int *Brake3){
 	double BT;
 	int HT;
-	//Serial.println("Into Apogee Call");
-	//this code has a prediction built in  to it
-	
-	// we want to make a code that will still deploy air brakes if we accidentally exceed an altitude
-	// without deploying the brakes
-	
+	// This code has a prediction built in  to it
+	// We want to make a code that will still deploy air brakes if we accidentally exceed an altitude
+	// Without deploying the brakes
 	// ALTREFINE  is the mediated result from the BMP and MPU					-input
 	// H1, H2 ,H3 are altitudes that we want to check what's going on           -input 
 	// V, Current velocity														-input
 	// BT is the time brakes will be deployed	-output			
-	//ALTREFINE=2001;/////////////////////////////////////////////////////////////////////////////////
+	// ALTREFINE=2001;/////////////////////////////////////////////////////////////////////////////////
 	// BrakeN is a counter to ensure only one braking cycle per section.		-internal logic
+	
 if ( (*Brake1==0) && (ALTREFINE >= H1)){
 	// HT is the target height for the iteration
 	HT=3070; // ft
@@ -516,7 +496,6 @@ if ( (*Brake1==0) && (ALTREFINE >= H1)){
 	
 	// What if the Prediction is lower than HT?
 	*Brake1=1;
-	//Serial.println("BRAKE1-----------------");
 	brake1Write();
 }
 
@@ -545,7 +524,7 @@ return BT;
 double ApogeePrediction( double ALTREFINE, double V, double HT) {
 	double NRG1,NRG2,Vout,ACC,FrontArea,D,BT;
 	int MassE,G;
-	//Serial.println(	"into Apogee Prediction");
+	
 	//G 		    	// Value of gravity in ft/s^2			-internal logic
 	//Hn                // Current Height value					-input
 	//HT				// Height of Target apogee				-input
@@ -568,10 +547,6 @@ double ApogeePrediction( double ALTREFINE, double V, double HT) {
 	FrontArea=.78; //ft^2
 	D=.85*((0.0023769*V*V)/2)*FrontArea;
 	ACC=D/MassE;
-	//Serial.print("D:");
-	//Serial.println(D);
-	//Serial.print("ACC:");
-	//Serial.println(ACC);
 	
 	
 	
@@ -580,19 +555,17 @@ double ApogeePrediction( double ALTREFINE, double V, double HT) {
 	NRG1= MassE*G*ALTREFINE;
 	NRG2= MassE*G*HT;
 	Vout= sqrt(((NRG2-NRG1)*2)/MassE);         // might need                   DOUBLE CHECK THE MATH HERE
-	//Serial.print("Vout:");
-	//Serial.println(Vout);
+
 	BT=(V-Vout)/(ACC+32);      // this is for drag     // BT should be in seconds
 	BT=BT*1000; // convert to milliseconds
 	
 	//BT=3000;///////////////////////////////////////////////////////////////
 	if (BT>0){
 	openServo(); // this will open the servo for this iteration if necessary this should be the only way to open the brakes
-	//Serial.println("OPEN BRAKES");
+	
 	openWrite();
 	}
-	//Serial.print("BT:::::");
-	//Serial.println(BT);
+	
    return BT;
 }
 
@@ -629,27 +602,22 @@ void BrakingLoop(unsigned long TimeSinceLaunch, int PoweredTime, int *BT){     /
 	//BT						// The braking time duration that  (ms)			- input	/ output with pointer		
 	//TimeStep					// time since Breaking started					-internal logic
 	int TimeStep,TimeStepStart;
-	//Serial.println("Into Brakingloop");
-	//Serial.print("Starting loop at:");
-	//Serial.println(millis());
+	
 	if (TimeSinceLaunch>PoweredTime){
-		//Serial.println("Powered time passed");
+		
 		if (*BT>0){
-		//Serial.println("BT is greater than 0");
+		
 		btWrite();
 		TimeStepStart=millis();
 			do{
-			//Serial.println(" Braking...");
+			
 			TimeStep=millis()-TimeStepStart;
 			getAcc();
 			getAlt();
 			writeData();
 					if (TimeStep>=*BT){
 					closeServo(); 		// Closing the brakes state   will call on function  this will be the only closing function
-					//Serial.println("Closing servo");
-					//Serial.print("At Time:");
 					
-					//Serial.println(millis());
 					TimeStep=0;  		// Resetting the counter
 					*BT=0    ;			// Reset the Braking time to 0 (this is a back up procedure)
 					}
@@ -668,7 +636,7 @@ int freefallDetect;
 		freefallWrite();
 		closeServo();
 		do {
-			//Serial.println("FREEFALL");//Check to see how this will react to conditions
+			
 			getAcc();
 			getAlt();
 			delay(200);
@@ -683,20 +651,18 @@ unsigned long LaunchDetection(int *launchDetect){
  //launchDetect				// conditional for operating 
  
  unsigned long TimeOfLaunch;
-	//Serial.println("Launch Detection Initialized");
-	//Serial.println(*launchDetect);
+	
 	if (*launchDetect==0){
-		//Serial.println("No launch Detected");// for testing
+		
 		do{
 			getAcc();
 			if (accX>=45){// figure out the acceleration right after launch----------------------------------------------------------
 					*launchDetect=1;
-					//Serial.println(accX);
+					
 					TimeOfLaunch=millis();
-					//Serial.println("Launch detected----------------------------------");// for testing
+					
 					launchDetectWrite();
-					//Serial.println(TimeOfLaunch);
-					//Serial.println(*launchDetect);
+					
 					
 			}
 		}while(*launchDetect==0);
@@ -710,18 +676,16 @@ void Abort(int launchDetect){
  
  int abortDetect=0;
 		getAcc();
-		//Serial.println(accX);
-		//Serial.println(accY);
-		//Serial.println(accZ);
+		
 	if ((launchDetect==1) && ( (abs(accY)>=32 ) || (abs(accZ)>=32))){
-		//Serial.print("Aborting mission");
+		
 		abortWrite();
 		abortDetect=1;
 		closeServo();
 		do{
 			getAcc();
 			getAlt();
-			//Serial.println("Writing...");
+			
 			delay(200);
 			writeData();
 			}while(abortDetect==1);
@@ -735,12 +699,12 @@ int VerticalDetect( int verticalDetect){
 	if(verticalDetect==0){
 		do{
 		
-		//Serial.println("Not vertical");
+		
 		getAcc();
 			if(accX>=25){
 			verticalDetect=1;
 			verticalWrite();
-			//Serial.print("Vertical Detected");
+			
 			}
 			
 		}while(verticalDetect==0);
@@ -752,14 +716,7 @@ double SlopeVelocity(unsigned long OldTime, unsigned long time, double alt_prev,
 	double Slope,OldTimeDouble,timeDouble;
 	OldTimeDouble=OldTime;
 	timeDouble=time;
-	//Serial.print("alt_refine:");
-	//Serial.println(alt_refine);
-	//Serial.print("alt_prev:");
-	//Serial.println(alt_prev);
-	//Serial.print("OldTime:");
-	//Serial.println(OldTimeDouble);
-	//Serial.print("time:");
-	//Serial.println(timeDouble);
+	
 	Slope=((alt_refine-alt_prev)/((timeDouble/1000)-(OldTimeDouble/1000)));
 	return Slope;
 }
@@ -902,7 +859,7 @@ void rollControl()
 		}
 	}
 	time = millis() - time;
-	Serial.println(time);
+	
 }
 
 

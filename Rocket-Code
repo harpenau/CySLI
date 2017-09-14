@@ -15,7 +15,6 @@
 
 #define R 1716  //(ft*lb)/(slug*degree_R) 
 #define g 32.174  //ft/s^2
-#define dataSize 101 
 
 //Servo Values
 int pos=0,verticalDetect=0;

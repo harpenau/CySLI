@@ -81,7 +81,7 @@ TimeSinceLaunch=T-TimeOfLaunch;
 
 
 
-/*
+/*(tanner)
 PoweredTime=2300; 	//NO
 write a function to recognize when the engine turns off aka when the acceleration turns negative
 */
@@ -381,7 +381,7 @@ double kalman(double UnFV,double FR1,double *Pold){
 	return FR2;  
 }
 
-double ApogeeCall(double ALTREFINE,int H1, int H2, int H3, double V,int *Brake1, int *Brake2,int *Brake3){
+double ApogeeCall(double ALTREFINE,int H1, int H2, int H3, double V,int *Brake1, int *Brake2,int *Brake3){//taylor
 	
 	//this will be completely rewritten
 	
@@ -531,7 +531,7 @@ void BrakingLoop(unsigned long TimeSinceLaunch, int PoweredTime, int *BT){     /
 
 }
 
-void FreefallDetection(int accX,int accY,int Brake3){
+void FreefallDetection(int accX,int accY,int Brake3){//tanner
 int freefallDetect;
 	if ((accX <= 1 && accX >= -50)&&(Brake3==1)){ 
 		freefallDetect=1;
@@ -568,7 +568,7 @@ unsigned long LaunchDetection(int *launchDetect){
 	} 
 }
 		
-void Abort(int launchDetect){
+void Abort(int launchDetect){//tanner
  
 	int abortDetect=0;
 	getAcc();

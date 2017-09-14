@@ -1,8 +1,8 @@
 //formatting rules:
-//do{ OR do
-//	 {
-//comments above or at the end
-//comments for everything
+//{ on same line
+//multicomment lines go above line
+//single line comments on same line and tabbed 
+//for function:what it does, name inputs and outputs define
 
 #include "I2Cdev.h"
 #include "MPU6050.h"

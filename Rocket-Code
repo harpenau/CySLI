@@ -363,8 +363,8 @@ double kalman(double UnFV,double FR1,double *Pold){
 	// Q and R are sensor specific values (probably)
 	// make sure to predefine P and possibly other values at the beginning of the main code. starts at 1
 
-	//UnFV		    	// unfiltered value from sensors read in (zn)						-internal logic
-	//FR1               // read this variable in from main (AX(i)) defined last iteration	-internal logic
+	//UnFV		    		// unfiltered value from sensors read in (zn)						-internal logic
+	//FR1               	// read this variable in from main (AX(i)) defined last iteration		-internal logic
 	//Pold    			// output Pold and read in Pold from last iteration					-input,output
 	//Q					// sensor specific value, we might default this						-input
 	//R					// sensor specific value, we might default this						-input
@@ -437,19 +437,19 @@ double ApogeePrediction( double ALTREFINE, double V, double HT) {
 	double NRG1,NRG2,Vout,ACC,FrontArea,D,BT;
 	int MassE,G;
 	
-	//G 		   	 	// Value of gravity in ft/s^2				-internal logic
-	//Hn               		// Current Height value					-input
+	//Hn              // Current Height value				-input
 	//HT				// Height of Target apogee				-input
-	//MassE				// Mass of rocket Empty					-internal logic
-	//NRG1				// Current Energy of rocket				-internal logic
-	//NRG2				// Desired Energy of rocket				-internal logic
 	//V				// Velocity in ft/s					-input
-	//Vout				// Velocity we need to be at currently			-internal logic
-	//ACC				// Acceleration due to drag and Gravity			-internal logic
+	//MassE			// Mass of rocket Empty				-internal logic
+	//NRG1			// Current Energy of rocket			-internal logic
+	//G 		   	 	// Value of gravity in ft/s^2			-internal logic
+	//NRG2			// Desired Energy of rocket			-internal logic
+	//Vout			// Velocity we need to be at currently	-internal logic
+	//ACC			// Acceleration due to drag and Gravity	-internal logic
+	//D				// Drag Force							-internal logic
+	//FrontArea		// Frontal area of rocket				-internal logic
+	//BT 			// Braking Time ms					-output
 	//BT				// Braking time(s)					-output
-	//D				// Drag Force						-internal logic
-	//FrontArea			// Frontal area of rocket				-internal logic
-	//BT 				// Braking Time ms					-output
 	
 	// internal logic variable declarations
 	MassE=50; // True mass is 26.5 some   lb //Change this<----------------------------------------------------------------------------------
@@ -483,13 +483,13 @@ double integrate(unsigned long time1, unsigned long time2, double Val1, double V
 	Time2=time2/1000;
 	Time1=time1/1000;
 
-	//Area						//result of integration  	-output
-	//Val1						//input of initial value	-input
-	//Val2						//input of secondary inital -input
-	//deltaT					//change in time			-internal logic
-	//deltaA					//change in value			-internal logic
-	//time2						//time previous				-input
-	//time1						//time current				-input
+	//Area				//result of integration  		-output
+	//Val1				//input of initial value		-input
+	//Val2				//input of secondary inital 	-input
+	//deltaT				//change in time				-internal logic
+	//deltaA				//change in value				-internal logic
+	//time2				//time previous				-input
+	//time1				//time current				-input
 
 
 	double deltaT, deltaA;     // declares Change in time, Change in Acceleration
@@ -505,10 +505,10 @@ void BrakingLoop(unsigned long TimeSinceLaunch, int PoweredTime, int *BT){     /
 
 // this will need to be rewritten to recognize when motor runs out aka when acceleration turns negative
 
-	//TimeSinceLaunch			// Time since launch detection					-input 
-	//PoweredTime 		    		// The time that the motor will burn (ms)			-input (also for internal logic
-	//BT					// The braking time duration that  (ms)				-input	/ output with pointer		
-	//TimeStep				// time since Breaking started					-internal logic
+	//TimeSinceLaunch				// Time since launch detection					-input 
+	//PoweredTime 		    		// The time that the motor will burn (ms)		-input (also for internal logic)
+	//BT							// The braking time duration that  (ms)			-input/output with pointer		
+	//TimeStep					// time since Breaking started					-internal logic
 	int TimeStep,TimeStepStart;
 	if (TimeSinceLaunch>PoweredTime){
 		if (*BT>0){

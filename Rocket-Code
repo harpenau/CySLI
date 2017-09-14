@@ -20,11 +20,7 @@
 int pos=0,verticalDetect=0, startPos = 0, setupDetect = 0;
 
 //variables 
-<<<<<<< HEAD
-int 	PoweredTime, OldaccX, BT = 0, launchDetect = 0, Brake3 = 0, Brake2 = 0, Brake1 = 0; 
-=======
 int 	PoweredTime, OldaccX, BT = 0, H1, H2, H3, launchDetect = 0, Brake3 = 0, Brake2 = 0, Brake1 = 0; 
->>>>>>> master
 // H1,H2,H3,Brake1,2,3 will be deleted, Probably launchDetect too
 
 double  Xprev = 0, PnextAx = 0, PnextALT = 0, alt_prev = 0, alt_refine, Ax;
@@ -50,12 +46,8 @@ double baseline; // baseline pressure
 int16_t accX, accY, accZ; //assigns 16 bit signed integers, used for balence of precision and speed
 
 //MPU 6050 gyro measurements
-<<<<<<< HEAD
-int16_t wX, wY, wZ; 
-=======
 int16_t wX, wY, wZ; //assigns 16 bit signed integers, used for balence of precision and speed
 
->>>>>>> master
 
 //BMP180 Altitude
 double altitude;
@@ -97,10 +89,6 @@ BrakingLoop(TimeSinceLaunch,PoweredTime,&BT);
 PoweredTime=2300; 	//NO
 write a function to recognize when the engine turns off aka when the acceleration turns negative
 */
-
-
-
-
 
 BrakingLoop(TimeSinceLaunch,PoweredTime,&BT);
 
@@ -148,17 +136,10 @@ Abort(launchDetect);//Abortion
 writeData();
 
 }
-<<<<<<< HEAD
-}
-//--------------------------------------------------------------Beginning of the Functions---------------------------------------------
- 
-//--SD Card Functions--
-
-=======
 //--------------------------------------------------------------Beginning of the Functions---------------------------------------------
  
 //--------------------------------------------------------------SD Card Functions------------------------------------------------------
->>>>>>> master
+
 void SDcardSetup(){
 	pinMode(4, OUTPUT);
   	SD.begin(4);  
@@ -235,13 +216,10 @@ void serialSetup(){
 //-----------------------------------------------------------Servo Methods--------------------------------------------------------------                                   
 						Adjust this to the current settings?
 void servoSetup(){
-<<<<<<< HEAD
+
   servo.attach(9); //attaches Servo variable to pin 9
   servo.write(0); //resets Servo to inital position, angle 0
-=======
-  servo.attach(9);
-  servo.write(0);
->>>>>>> master
+
 }
 
 void closeServo(){
@@ -362,12 +340,8 @@ void getAcc(){
 }
 
 void mpuSetup(){
-<<<<<<< HEAD
+
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE //defines how to setup sensor with certain hardware config
-=======
-    //????????? 
-    #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
->>>>>>> master
         Wire.begin();
     #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
         Fastwire::setup(400, true);
@@ -421,21 +395,13 @@ double ApogeeCall(double ALTREFINE,int H1, int H2, int H3, double V,int *Brake1,
 	// we want to make a code that will still deploy air brakes if we accidentally exceed an altitude
 	// without deploying the brakes
 	
-<<<<<<< HEAD
 	// ALTREFINE  		//Mediated result from the BMP and MPU					-input
 	// H1, H2 ,H3 		//Altitudes that we want to check what's going on         -input  <-- delete if using active prediction method instead?
 	// V, 				//Current velocity									-input
 	// BT				//Time brakes will be deployed							-output			
 	// ALTREFINE=2001;???
 	// BrakeN 			//counter to ensure only one braking cycle per section	-internal logic
-=======
-	// ALTREFINE  is the mediated result from the BMP and MPU					-input
-	// H1, H2 ,H3 are altitudes that we want to check what's going on           			-input 
-	// V, Current velocity										-input
-	// BT is the time brakes will be deployed							-output			
-	// ALTREFINE=2001;???
-	// BrakeN is a counter to ensure only one braking cycle per section.				-internal logic
->>>>>>> master
+
 
 
 if ( (*Brake1==0) && (ALTREFINE >= H1)){
@@ -475,7 +441,6 @@ double ApogeePrediction( double ALTREFINE, double V, double HT) {
 	double NRG1,NRG2,Vout,ACC,FrontArea,D,BT;
 	int MassE,G;
 	
-<<<<<<< HEAD
 	//Hn               	// Current Height value				  -input
 	//HT				    // Height of Target apogee				  -input
 	//V				    // Velocity in ft/s					  -input
@@ -488,21 +453,6 @@ double ApogeePrediction( double ALTREFINE, double V, double HT) {
 	//D				    // Drag Force							  -internal logic
 	//FrontArea			// Frontal area of rocket				  -internal logic
 	//BT 				// Braking Time ms					  -output
-=======
-	//G 		   	 	// Value of gravity in ft/s^2				-internal logic
-	//Hn               		// Current Height value					-input
-	//HT				// Height of Target apogee				-input
-	//MassE				// Mass of rocket Empty					-internal logic
-	//NRG1				// Current Energy of rocket				-internal logic
-	//NRG2				// Desired Energy of rocket				-internal logic
-	//V				// Velocity in ft/s					-input
-	//Vout				// Velocity we need to be at currently			-internal logic
-	//ACC				// Acceleration due to drag and Gravity			-internal logic
-	//BT				// Braking time(s)					-output
-	//D				// Drag Force						-internal logic
-	//FrontArea			// Frontal area of rocket				-internal logic
-	//BT 				// Braking Time ms					-output
->>>>>>> master
 	
 	// internal logic variable declarations
 	MassE=50; // True mass is 26.5 some   lb //Change this<----------------------------------------------------------------------------------
@@ -534,7 +484,6 @@ double integrate(unsigned long time1, unsigned long time2, double Val1, double V
 	Time2=time2/1000;
 	Time1=time1/1000;
 
-<<<<<<< HEAD
 	//Area				     //result of integration  	    -output
 	//Val1					//input of initial value	    -input
 	//Val2					//input of secondary inital    -input
@@ -543,19 +492,6 @@ double integrate(unsigned long time1, unsigned long time2, double Val1, double V
 	//time1					//time previous				-input
 	//time2					//time current				-input
 	   
-=======
-	//Area						//result of integration  	-output
-	//Val1						//input of initial value	-input
-	//Val2						//input of secondary inital -input
-	//deltaT					//change in time			-internal logic
-	//deltaA					//change in value			-internal logic
-	//time2						//time previous				-input
-	//time1						//time current				-input
-
-
-	double deltaT, deltaA;     // declares Change in time, Change in Acceleration
-	double Area; 		   // declares Final Area
->>>>>>> master
 	deltaT = Time2-Time1;      // computes deltaT
 	deltaA = (Val2+Val1)/2;    // computes deltaA
 	Area = deltaT*deltaA; 	    // computes Area
@@ -568,16 +504,10 @@ void BrakingLoop(unsigned long TimeSinceLaunch, int PoweredTime, int *BT){     /
 // this will need to be rewritten to recognize when motor runs out aka when acceleration turns negative
 
 	//TimeSinceLaunch			// Time since launch detection					-input 
-<<<<<<< HEAD
 	//PoweredTime 		    	// The time that the motor will burn (ms)		-input (also for internal logic
 	//BT					    // The braking time duration that  (ms)			-input	/ output with pointer		
 	//TimeStep				    // time since Breaking started				-internal logic
 	
-=======
-	//PoweredTime 		    		// The time that the motor will burn (ms)			-input (also for internal logic
-	//BT					// The braking time duration that  (ms)				-input	/ output with pointer		
-	//TimeStep				// time since Breaking started					-internal logic
->>>>>>> master
 	int TimeStep,TimeStepStart;
 	if (TimeSinceLaunch>PoweredTime){
 		if (*BT>0){
@@ -588,11 +518,7 @@ void BrakingLoop(unsigned long TimeSinceLaunch, int PoweredTime, int *BT){     /
 				getAcc();
 				getAlt();
 				writeData();
-<<<<<<< HEAD
 				if (TimeStep>=*BT){
-=======
-					if (TimeStep>=*BT){
->>>>>>> master
 					closeServo(); 		// Closing the brakes state   will call on function  this will be the only closing function
 					TimeStep=0;  		// Resetting the counter
 					*BT=0    ;			// Reset the Braking time to 0 (this is a back up procedure)
@@ -654,18 +580,10 @@ void Abort(int launchDetect){
 			getAlt();
 			delay(200);
 			writeData();
-<<<<<<< HEAD
-			} while(abortDetect==1);
+		} while(abortDetect==1);
 	}			
 }
 
-=======
-			}
-		while(abortDetect==1);
-	}			
-}
-	
->>>>>>> master
 double SlopeVelocity(unsigned long OldTime, unsigned long time, double alt_prev, double alt_refine){
 	double Slope,OldTimeDouble,timeDouble;
 	OldTimeDouble=OldTime;
@@ -673,8 +591,3 @@ double SlopeVelocity(unsigned long OldTime, unsigned long time, double alt_prev,
 	Slope=((alt_refine-alt_prev)/((timeDouble/1000)-(OldTimeDouble/1000)));
 	return Slope;
 }
-<<<<<<< HEAD
-=======
-
-
->>>>>>> master

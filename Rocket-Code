@@ -482,12 +482,12 @@ double ApogeeCall(double ALTREFINE,int H1, int H2, int H3, double V,int *Brake1,
 	// This code has a prediction built in  to it
 	// We want to make a code that will still deploy air brakes if we accidentally exceed an altitude
 	// Without deploying the brakes
-	// ALTREFINE  is the mediated result from the BMP and MPU					-input
+	// ALTREFINE  is the mediated result from the BMP and MPU		    -input
 	// H1, H2 ,H3 are altitudes that we want to check what's going on           -input 
 	// V, Current velocity														-input
-	// BT is the time brakes will be deployed	-output			
-	// ALTREFINE=2001;/////////////////////////////////////////////////////////////////////////////////
-	// BrakeN is a counter to ensure only one braking cycle per section.		-internal logic
+	// BT is the time brakes will be deployed				    -output			
+	// ALTREFINE=2001;<---------------------------------------------------------
+	// BrakeN is a counter to ensure only one braking cycle per section.	    -internal logic
 	
 if ( (*Brake1==0) && (ALTREFINE >= H1)){
 	// HT is the target height for the iteration
@@ -502,7 +502,7 @@ if ( (*Brake1==0) && (ALTREFINE >= H1)){
 	else if ((ALTREFINE>=H2) && (*Brake2==0)){
 		HT=3025; // ft
 	BT=ApogeePrediction(ALTREFINE,V,HT);
-	// include in this function the turn on key
+	// Include in this function the turn on key
 	*Brake2=1;
 	brake2Write();
 }
@@ -510,7 +510,7 @@ if ( (*Brake1==0) && (ALTREFINE >= H1)){
 		HT=3000; // ft
 	BT=ApogeePrediction(ALTREFINE,V,HT);
 
-	// include in this function the turn on 
+	// Include in this function the turn on 
 	*Brake3=1;
 	brake3Write();
 }
@@ -525,22 +525,22 @@ double ApogeePrediction( double ALTREFINE, double V, double HT) {
 	double NRG1,NRG2,Vout,ACC,FrontArea,D,BT;
 	int MassE,G;
 	
-	//G 		    	// Value of gravity in ft/s^2			-internal logic
-	//Hn                // Current Height value					-input
+	//G 		    		// Value of gravity in ft/s^2				-internal logic
+	//Hn                		// Current Height value					-input
 	//HT				// Height of Target apogee				-input
 	//MassE				// Mass of rocket Empty					-internal logic
 	//NRG1				// Current Energy of rocket				-internal logic
 	//NRG2				// Desired Energy of rocket				-internal logic
-	//V					// Velocity in ft/s						-input
-	//Vout				// Velocity we need to be at currently	-internal logic
-	//ACC				// Acceleration due to drag and Gravity	-internal logic
-	//BT				// Braking time(s)						-output
-	//D					// Drag Force							-internal logic
+	//V				// Velocity in ft/s					-input
+	//Vout				// Velocity we need to be at currently			-internal logic
+	//ACC				// Acceleration due to drag and Gravity			-internal logic
+	//BT				// Braking time(s)					-output
+	//D				// Drag Force						-internal logic
 	//FrontArea			// Frontal area of rocket				-internal logic
-	//BT 				// Braking Time ms						-output
+	//BT 				// Braking Time ms					-output
 	
 	// internal logic variable declarations
-	MassE=50; // True mass is 26.5 some   lb //Change this<----------------------------------------------------------------------------------
+	MassE=50; // True mass is 26.5 some   lb //Change this<-------------------------------------------
 	G=32; // ft/s
 	
 	//drag equation
@@ -554,12 +554,12 @@ double ApogeePrediction( double ALTREFINE, double V, double HT) {
 	// double check the drag equation here. cause its just kinda arbitrary
 	NRG1= MassE*G*ALTREFINE;
 	NRG2= MassE*G*HT;
-	Vout= sqrt(((NRG2-NRG1)*2)/MassE);         // might need                   DOUBLE CHECK THE MATH HERE
+	Vout= sqrt(((NRG2-NRG1)*2)/MassE);         // DOUBLE CHECK THE MATH HERE
 
 	BT=(V-Vout)/(ACC+32);      // this is for drag     // BT should be in seconds
-	BT=BT*1000; // convert to milliseconds
+	BT=BT*1000; 	// convert to milliseconds
 	
-	//BT=3000;///////////////////////////////////////////////////////////////
+	//BT=3000;	//<-----------------------------------------------------------------
 	if (BT>0){
 	openServo(); // this will open the servo for this iteration if necessary this should be the only way to open the brakes
 	
@@ -577,9 +577,9 @@ double integrate(unsigned long time1, unsigned long time2, double Val1, double V
 	Time2=time2/1000;
 	Time1=time1/1000;
 
-	//Area						//result of integration  	-output
-	//Val1						//input of initial value	-input
-	//Val2						//input of secondary inital -input
+	//Area						//result of integration  		-output
+	//Val1						//input of initial value		-input
+	//Val2						//input of secondary inital 		-input
 	//deltaT					//change in time			-internal logic
 	//deltaA					//change in value			-internal logic
 	//time2						//time previous				-input
@@ -587,7 +587,7 @@ double integrate(unsigned long time1, unsigned long time2, double Val1, double V
 
 
 	double deltaT, deltaA;     // declares Change in time, Change in Acceleration
-	double Area; 			   // declares Final Area
+	double Area; 		   // declares Final Area
 	deltaT = Time2-Time1;      // computes deltaT
 	deltaA = (Val2+Val1)/2;    // computes deltaA
 	Area = deltaT*deltaA; 	   // computes Area
@@ -597,10 +597,11 @@ double integrate(unsigned long time1, unsigned long time2, double Val1, double V
 
 void BrakingLoop(unsigned long TimeSinceLaunch, int PoweredTime, int *BT){     // double check for class definition and output class
 
-	//TimeSinceLaunch			// Time since launch detection					- input 
-	//PoweredTime 		    	// The time that the motor will burn (ms)		- input (also for internal logic
-	//BT						// The braking time duration that  (ms)			- input	/ output with pointer		
-	//TimeStep					// time since Breaking started					-internal logic
+	//TimeSinceLaunch			// Time since launch detection				- input 
+	//PoweredTime 		    		// The time that the motor will burn (ms)		- input (also for internal logic
+	//BT					// The braking time duration that  (ms)			- input	/ output with pointer		
+	//TimeStep				// time since Breaking started				-internal logic
+	
 	int TimeStep,TimeStepStart;
 	
 	if (TimeSinceLaunch>PoweredTime){
@@ -616,10 +617,10 @@ void BrakingLoop(unsigned long TimeSinceLaunch, int PoweredTime, int *BT){     /
 			getAlt();
 			writeData();
 					if (TimeStep>=*BT){
-					closeServo(); 		// Closing the brakes state   will call on function  this will be the only closing function
+					closeServo(); 		// Closing the brakes state will call on function this will be the only closing function
 					
 					TimeStep=0;  		// Resetting the counter
-					*BT=0    ;			// Reset the Braking time to 0 (this is a back up procedure)
+					*BT=0    ;		// Reset the Braking time to 0 (this is a back up procedure)
 					}
 			}while(*BT>0);
 		}
@@ -631,7 +632,6 @@ void BrakingLoop(unsigned long TimeSinceLaunch, int PoweredTime, int *BT){     /
 void FreefallDetection(int accX,int accY,int Brake3){
 int freefallDetect;
 	if ((accX <= 1 && accX >= -50)&&(Brake3==1)){ 
-	//------------------------------------------------ try dropping that shit
 		freefallDetect=1;
 		freefallWrite();
 		closeServo();
@@ -656,7 +656,7 @@ unsigned long LaunchDetection(int *launchDetect){
 		
 		do{
 			getAcc();
-			if (accX>=45){// figure out the acceleration right after launch----------------------------------------------------------
+			if (accX>=45){	// figure out the acceleration right after launch----------------------------------------------------------
 					*launchDetect=1;
 					
 					TimeOfLaunch=millis();
@@ -723,13 +723,13 @@ double SlopeVelocity(unsigned long OldTime, unsigned long time, double alt_prev,
 	
 
 
-//--------------------------------------------------------------------------------------------------------Roll Control Shit--------------------------------------------------------------------------------------------------------
+//-------------------------------------------------Roll Control ---------------------------------------------------
 
-//Recalibrate before the actual launch
-//Just run the MPU_6050.ino file and enter the numbers here
+// Recalibrate before the actual launch
+// Just run the MPU_6050.ino file and enter the numbers here
 void calibrateMPU()
 {
-	mpu.setXAccelOffset(368);
+    mpu.setXAccelOffset(368);
     mpu.setYAccelOffset(-2364);
     mpu.setZAccelOffset(1490);
     mpu.setXGyroOffset(-11);
@@ -745,7 +745,7 @@ void updateGyro()
 
 void updateAccel()
 {
-	//change last 2 values to 64, 128, 256, or 512 depending on acceleration range
+   // Change last 2 values to 64, 128, 256, or 512 depending on acceleration range
 	mpu.getAcceleration(&accX, &accY, &accZ);
 	accX = map(accX, -32768, 32767, -512, 512);
 	accY = map(accY, -32768, 32767, -512, 512);
@@ -754,14 +754,14 @@ void updateAccel()
 
 void updateOmega()
 {
-	//change last 2 values to 250, 500, 1000, or 2000 depending on angular velocity range
+   // Change last 2 values to 250, 500, 1000, or 2000 depending on angular velocity range
 	mpu.getRotation(&wX, &wY, &wZ);
 	wX = map(wX, -32768, 32767, -1000, 1000);
 	wY = map(accY, -32768, 32767, -1000, 1000);
 	wZ = map(accZ, -32768, 32767, -1000, 1000);
 }
 
-//integrates acceleration to find and return current velocity
+// Integrates acceleration to find and return current velocity
 double getVelocity()
 {
 	OldVelocity = velocity;

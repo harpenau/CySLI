@@ -18,10 +18,10 @@
 int pos=0;			// postition of the servo (degrees?)
 
 //These are not all on the same line to comment them
-double Xprev = 0;		// previous x acceleration
+double AxPrev = 0;		// previous x acceleration
 double PnextAx = 0;		//
 double PnextALT = 0; 		//
-double alt_prev = 0; 		//
+double alt_prev = 0; 		//previous altitude from 
 double alt_refine;		// 
 double Ax;			//
 double VelocityNew;		//
@@ -30,7 +30,7 @@ double OldVelocity = 0;		//
 double PositionNew;		//
 double Position = 0;		//
 double ALTREFINE;		//
-double slopeVelocity = 0;	// velocity from BMP, derived from position
+double velocityBMP = 0;		// velocity from BMP, derived from position
 double baseline; 		// baseline pressure
 
 unsigned long T=0,		//
@@ -79,17 +79,10 @@ void loop() { // run code ( main code)
 T=millis(); // this is needed to distinguish from time in brakingloop
 TimeSinceLaunch=T-TimeOfLaunch;  
 
-
-
-
 /*(tanner)
 PoweredTime=2300; 	//NO
 write a function to recognize when the engine turns off aka when the acceleration turns negative
 */
-
-
-
-
 
 BrakingLoop(TimeSinceLaunch,PoweredTime,&BT);		//in the process of being changed
 
@@ -97,12 +90,12 @@ time=millis();  					// current time for measurements
 getAcc(); 						// Updates accX,accY,accZ
 getAlt(); 						// Updates altitude
 
-(Ax)=kalman(accX,    Xprev,   &PnextAx); 		// calls the kalman filter to refine acceleration in the X direction
+(Ax)=kalman(accX,    AxPrev,   &PnextAx); 		// calls the kalman filter to refine acceleration in the X direction
 (alt_refine)=kalman(altitude,alt_prev, &PnextALT); 	// refines altitude 
 
 
-slopeVelocity=SlopeVelocity(OldTime,time,alt_prev,alt_refine); 		// deriving velocity from position from BMP
-VelocityNew=integrate(OldTime,time,Xprev,Ax);				// integrating acceleration from MPU since last measurement to get velocity
+velocityBMP=Derive(OldTime,time,alt_prev,alt_refine); 			// deriving velocity from position from BMP
+VelocityNew=integrate(OldTime,time,AxPrev,Ax);				// integrating acceleration from MPU since last measurement to get velocity
 OldVelocity=Velocity;							// still need the now old velocity to find position at that time 
 Velocity=Velocity+VelocityNew;						// calculates the now new velocity
 PositionNew=integrate(OldTime,time,OldVelocity,Velocity);		// integration to find position from MPU
@@ -110,13 +103,13 @@ Position=Position+PositionNew;  					// Position is defined as 0 at start
 
 
 OldTime=time;		// ms, reassigns time for lower bound at next integration cycle
-Xprev=Ax;		// Xprev will be started at 0   
-alt_prev=alt_refine;  	// alt_prev will started at 0 in definitions
+AxPrev=Ax;		// reassigns Ax for initial acceleration at next integration cycle  
+alt_prev=alt_refine;  	// reassigns alt_refine for initial altitude at next derivation
 
 ALTREFINE=alt_refine;
 
 if (TimeSinceLaunch>PoweredTime) {
-	BT=ApogeeCall(ALTREFINE,H1,H2,H3,slopeVelocity,&Brake1,&Brake2,&Brake3); //will be reworked
+	BT=ApogeeCall(ALTREFINE,H1,H2,H3,velocityBMP,&Brake1,&Brake2,&Brake3); //will be reworked
 }
 //These two will be rewritten into one 
 FreefallDetection(accX,accY,Brake3); 	// Freefall
@@ -155,7 +148,7 @@ void writeData(){
  dataFile.print(",");
  dataFile.print(Ax);
  dataFile.print(",");
- dataFile.println(slopeVelocity);
+ dataFile.println(derive);
  dataFile.close();
 }
 
@@ -571,7 +564,7 @@ void Abort(int launchDetect){//tanner
 	}			
 }
 	
-double SlopeVelocity(unsigned long OldTime, unsigned long time, double alt_prev, double alt_refine){
+double Derive(unsigned long OldTime, unsigned long time, double alt_prev, double alt_refine){
 	double Slope,OldTimeDouble,timeDouble;
 	OldTimeDouble=OldTime;
 	timeDouble=time;

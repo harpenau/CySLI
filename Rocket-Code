@@ -4,62 +4,63 @@
 //single line comments on same line and tabbed 
 //for function:what it does, name inputs and outputs define
 
-#include "I2Cdev.h"
-#include "MPU6050.h"
-#include "Wire.h"
-#include <SFE_BMP180.h>
-#include <Servo.h>
-#include <SPI.h>
-#include <SD.h>
+#include "I2Cdev.h"		// provides simple and intuitive interfaces to I2C devices
+#include "MPU6050.h"		// IMU library
+#include "Wire.h"		// allows you to communicate with I2C / TWI devices
+#include <SFE_BMP180.h>		// pressure/temp sensor library
+#include <Servo.h>		// servo library
+#include <SPI.h>		// Serial Peripheral Interface(SPI) used for communicating with one or more peripheral devices quickly over short distances
+#include <SD.h>			// microSD card library
 
+#define R 1716  		// (ft*lb)/(slug*degree_R) 
+#define g 32.174		// ft/s^2
 
-#define R 1716  //(ft*lb)/(slug*degree_R) 
-#define g 32.174  //ft/s^2
+int pos=0;			// postition of the servo (degrees?)
 
-//Servo Values
-int pos=0,verticalDetect=0;
-int startPos=0,setupDetect=0;
+//These are not all on the same line to comment them
+double Xprev = 0;		// previous x acceleration
+double PnextAx = 0;		//
+double PnextALT = 0; 		//
+double alt_prev = 0; 		//
+double alt_refine;		// 
+double Ax;			//
+double VelocityNew;		//
+double Velocity;		//
+double OldVelocity = 0;		//
+double PositionNew;		//
+double Position = 0;		//
+double ALTREFINE;		//
+double slopeVelocity = 0;	// velocity from BMP, derived from position
+double baseline; 		// baseline pressure
 
-//variables 
-int 	PoweredTime, OldaccX, BT = 0, H1, H2, H3, launchDetect = 0, Brake3 = 0, Brake2 = 0, Brake1 = 0; 
-// H1,H2,H3,Brake1,2,3 will be deleted, Probably launchDetect too
-
-double  Xprev = 0, PnextAx = 0, PnextALT = 0, alt_prev = 0, alt_refine, Ax;
-double  VelocityNew, Velocity, OldVelocity = 0, PositionNew, Position = 0,ALTREFINE;
-double  slopeVelocity = 0;
-double rho = 0, q = 0;
-
-unsigned long T=0,TimeOfLaunch=0,TimeSinceLaunch=0;
-unsigned long time=0;    // this is a variable
-unsigned long OldTime=0; // this is a variable
+unsigned long T=0,		//
+unsigned long TimeOfLaunch=0;	//
+unsigned long TimeSinceLaunch=0;//
+unsigned long time=0;   	//
+unsigned long OldTime=0;	//
 
 
 //Objects
 SFE_BMP180 bmp;
 MPU6050 mpu;
 Servo servo;
+File dataFile;			// the datafile variable to save stuff to microSD
 
-File dataFile;
 
-double baseline; // baseline pressure
 
 //MPU 6050 Accelerations
-int16_t accX, accY, accZ; //assigns 16 bit signed integers, used for balence of precision and speed
-
-//MPU 6050 gyro measurements
-int16_t wX, wY, wZ; //assigns 16 bit signed integers, used for balence of precision and speed
-
+int16_t accX, accY, accZ; 	// unfiltered accelerations, assigns 16 bit signed integers, used for balence of precision and speed
 
 //BMP180 Altitude
-double altitude;
+double altitude;		// yup
 
 void setup() {
-  mpuSetup();
+  mpuSetup();			// all aptly named
   bmpSetup();
   serialSetup();
   servoSetup();
-  SDcardSetup(); //set up sd card to read RC data
-  SDcardWriteSetup(); //setup sd card to write data to
+  //SDcardSetup(); 		//set up sd card to read RC data
+  SDcardWriteSetup(); 		//setup sd card to write data to
   
 }
 
@@ -90,50 +91,38 @@ write a function to recognize when the engine turns off aka when the acceleratio
 
 
 
-BrakingLoop(TimeSinceLaunch,PoweredTime,&BT);
+BrakingLoop(TimeSinceLaunch,PoweredTime,&BT);		//in the process of being changed
 
-time=millis();  // current time for measurements
-getAcc(); 		// Updates accX,accY,accZ
-getAlt(); 		// Updates altitude
+time=millis();  					// current time for measurements
+getAcc(); 						// Updates accX,accY,accZ
+getAlt(); 						// Updates altitude
 
-(Ax)=kalman(accX,    Xprev,   &PnextAx); 
-
-(alt_refine)=kalman(altitude,alt_prev, &PnextALT); 
-
-//2 forms of getting velocity
-//Velocity from BMP
-slopeVelocity=SlopeVelocity(OldTime,time,alt_prev,alt_refine);//deriving velocity from position
-//wtf? slopeVelocity is the derivative of position from the bmp,so we have 2 measures of velocity, we should fuse them somehow 
-
-//Velocity from gyro
-VelocityNew=integrate(OldTime,time,Xprev,Ax);// integrating acceleration to get velocity
-OldVelocity=Velocity;
-Velocity=Velocity+VelocityNew;
+(Ax)=kalman(accX,    Xprev,   &PnextAx); 		// calls the kalman filter to refine acceleration in the X direction
+(alt_refine)=kalman(altitude,alt_prev, &PnextALT); 	// refines altitude 
 
 
-PositionNew=integrate(OldTime,time,OldVelocity,Velocity);// integration to find position
-Position=Position+PositionNew;  // Position is defined as 0 at start 
+slopeVelocity=SlopeVelocity(OldTime,time,alt_prev,alt_refine); 		// deriving velocity from position from BMP
+VelocityNew=integrate(OldTime,time,Xprev,Ax);				// integrating acceleration from MPU since last measurement to get velocity
+OldVelocity=Velocity;							// still need the now old velocity to find position at that time 
+Velocity=Velocity+VelocityNew;						// calculates the now new velocity
+PositionNew=integrate(OldTime,time,OldVelocity,Velocity);		// integration to find position from MPU
+Position=Position+PositionNew;  					// Position is defined as 0 at start 
 
-// reassign the acceleration values to oldACCx,oldACCz,oldACCy, time too
-OldaccX=accX ;			//OldaccX assigned 0 at start
-OldTime=time;//ms		//OldTime assigned 0 at start
-Xprev=Ax;				//Xprev will be started at 0   
-alt_prev=alt_refine;  	//alt_prev will started at 0 in definitions
 
-// look at averaging the values for altitude ( for the testing on March 8th we will use the BMP for testing)
+OldTime=time;		// ms, reassigns time for lower bound at next integration cycle
+Xprev=Ax;		// Xprev will be started at 0   
+alt_prev=alt_refine;  	// alt_prev will started at 0 in definitions
+
 ALTREFINE=alt_refine;
 
-H1=1500;   //these are the heights that we will start the braking 
-H2=2400;
-H3=2750;
-if (TimeSinceLaunch>PoweredTime){
-BT=ApogeeCall(ALTREFINE,H1,H2,H3,slopeVelocity,&Brake1,&Brake2,&Brake3);
+if (TimeSinceLaunch>PoweredTime) {
+	BT=ApogeeCall(ALTREFINE,H1,H2,H3,slopeVelocity,&Brake1,&Brake2,&Brake3); //will be reworked
+}
+//These two will be rewritten into one 
+FreefallDetection(accX,accY,Brake3); 	// Freefall
+Abort(launchDetect);			// Abortion
 
-FreefallDetection(accX,accY,Brake3);// Freefall
- 
-Abort(launchDetect);//Abortion
-
-writeData();
+writeData();	// writes all pertinent data
 
 }
 //--------------------------------------------------------------Beginning of the Functions---------------------------------------------
@@ -363,11 +352,11 @@ double kalman(double UnFV,double FR1,double *Pold){
 	// Q and R are sensor specific values (probably)
 	// make sure to predefine P and possibly other values at the beginning of the main code. starts at 1
 
-	//UnFV		    		// unfiltered value from sensors read in (zn)						-internal logic
-	//FR1               	// read this variable in from main (AX(i)) defined last iteration		-internal logic
-	//Pold    			// output Pold and read in Pold from last iteration					-input,output
-	//Q					// sensor specific value, we might default this						-input
-	//R					// sensor specific value, we might default this						-input
+	//UnFV		// unfiltered value from sensors read in (zn)						-internal logic
+	//FR1           // read this variable in from main (AX(i)) defined last iteration			-internal logic
+	//Pold    	// output Pold and read in Pold from last iteration					-input,output
+	//Q		// sensor specific value, we might default this						-input
+	//R		// sensor specific value, we might default this						-input
 	//A					
 	
 	Prediction= A*FR1 +B*un; // State Prediction 		(Predict where we're goning to be)

@@ -480,13 +480,13 @@ double ApogeeCall(double ALTREFINE,int H1, int H2, int H3, double V,int *Brake1,
 	double BT;
 	int HT;
 	// This code has a prediction built in  to it
-	// We want to make a code that will still deploy air brakes if we accidentally exceed an altitude
+	// **We want to make a code that will still deploy air brakes if we accidentally exceed an altitude
 	// Without deploying the brakes
 	// ALTREFINE  is the mediated result from the BMP and MPU		    -input
 	// H1, H2 ,H3 are altitudes that we want to check what's going on           -input 
 	// V, Current velocity														-input
 	// BT is the time brakes will be deployed				    -output			
-	// ALTREFINE=2001;<---------------------------------------------------------
+	ALTREFINE=2001;//<---------------------------------------------------------(CHANGE VALUE?)
 	// BrakeN is a counter to ensure only one braking cycle per section.	    -internal logic
 	
 if ( (*Brake1==0) && (ALTREFINE >= H1)){
@@ -494,7 +494,7 @@ if ( (*Brake1==0) && (ALTREFINE >= H1)){
 	HT=3070; // ft
 	BT=ApogeePrediction(ALTREFINE,V,HT);
 	
-	// What if the Prediction is lower than HT?
+	// If the Prediction is lower than HT
 	*Brake1=1;
 	brake1Write();
 }

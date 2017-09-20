@@ -19,16 +19,16 @@ int pos=0;			// postition of the servo (degrees?)
 
 //These are not all on the same line to comment them
 double AxPrev = 0;		// previous x acceleration
-double PnextAx = 0;		//
-double PnextALT = 0; 		//
-double alt_prev = 0; 		//previous altitude from 
-double alt_refine;		// 
-double Ax;			//
-double VelocityNew;		//
-double Velocity;		//
-double OldVelocity = 0;		//
-double PositionNew;		//
-double Position = 0;		//
+double PnextAx = 0;		// prediction of next x acceleration for kalman filter
+double PnextALT = 0; 		// prediction of next altitude for kalman filter
+double alt_prev = 0; 		// saved altitude from previous loop
+double alt_refine;		// smoothed altitude
+double Ax;			// smoothed x acceleration
+double VelocityNew;		// added or subtracted velocity since last loop
+double Velocity;		// current velocity
+double OldVelocity = 0;		// saved velocity from previous loop
+double PositionNew;		// integrated velocity since last loop
+double Position = 0;		// current position
 double ALTREFINE;		//
 double velocityBMP = 0;		// velocity from BMP, derived from position
 double baseline; 		// baseline pressure
@@ -112,8 +112,8 @@ if (TimeSinceLaunch>PoweredTime) {
 	BT=ApogeeCall(ALTREFINE,H1,H2,H3,velocityBMP,&Brake1,&Brake2,&Brake3); //will be reworked
 }
 //These two will be rewritten into one 
-FreefallDetection(accX,accY,Brake3); 	// Freefall
-Abort(launchDetect);			// Abortion
+FreefallDetection(accX,accY,Brake3); 	
+Abort(launchDetect);			
 
 writeData();	// writes all pertinent data
 
@@ -347,6 +347,7 @@ double kalman(double UnFV,double FR1,double *Pold){
 	//Q		// sensor specific value, we might default this						-input
 	//R		// sensor specific value, we might default this						-input
 	//A					
+	//FR2
 	
 	Prediction= A*FR1 +B*un; // State Prediction 		(Predict where we're goning to be)
 	P=A*(*Pold)*A +Q;		 // Covariance Prediction 	(Predict how much error)

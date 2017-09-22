@@ -84,17 +84,6 @@ void loop() { // run code ( main code)
 //startPos=1;
 //
 
-if (setupDetect==0){
-openServo();
-	/*do{
-		getAcc();
-		if (accX>30){
-		setupDetect=1;
-		closeServo();
-		delay(600000);// to allow time for placing on AGSE (10 min delay)
-		}
-	}while(setupDetect==0);*/ //AGSE stuff?
-}	
 
 if(verticalDetect==0){
 verticalDetect=VerticalDetect(verticalDetect);
@@ -320,16 +309,16 @@ if (pos<200){
  do{
 	
 	pos += 10;
-	//140degree                      // in steps of 5 degree 
-	servo.write(pos);              // tell servo to go to position in variable 'pos' 
-	delay(20);    					// waits 15ms for the servo to reach the position 
-	}while(pos <=200);
+	//140degree                     // in steps of 5 degree 
+	servo.write(pos);               // tell servo to go to position in variable 'pos' 
+	delay(20);    			// waits 15ms for the servo to reach the position 
+	}while(pos <=150);
 } 
 	/*for(pos; pos >= 200; pos++){
 		servo.write(pos);
 		delay(1);
 	}
-	}*/
+	}
 }
 
 //BMP 180 Methods
@@ -476,46 +465,46 @@ double kalman(double UnFV,double FR1,double *Pold){
     
 }
 
-double ApogeeCall(double ALTREFINE,int H1, int H2, int H3, double V,int *Brake1, int *Brake2,int *Brake3){
+double ApogeeCall(double ALTREFINE,int H1, int H2, int H3, double V,int *Brake1, int *Brake2,int *Brake3)
+{
 	double BT;
 	int HT;
+	ALTREFINE=2001;
+	
 	// This code has a prediction built in  to it
 	// **We want to make a code that will still deploy air brakes if we accidentally exceed an altitude
 	// Without deploying the brakes
-	// ALTREFINE  is the mediated result from the BMP and MPU		    -input
+	// ALTREFINE is the mediated result from the BMP and MPU		    -input
 	// H1, H2 ,H3 are altitudes that we want to check what's going on           -input 
 	// V, Current velocity														-input
 	// BT is the time brakes will be deployed				    -output			
-	ALTREFINE=2001;//<---------------------------------------------------------(CHANGE VALUE?)
 	// BrakeN is a counter to ensure only one braking cycle per section.	    -internal logic
-	
-if ( (*Brake1==0) && (ALTREFINE >= H1)){
-	// HT is the target height for the iteration
-	HT=3070; // ft
-	BT=ApogeePrediction(ALTREFINE,V,HT);
-	
-	// If the Prediction is lower than HT
-	*Brake1=1;
-	brake1Write();
-}
 
+	
+	if ((*Brake1==0) && (ALTREFINE >= H1)){
+		// HT is the target height for the iteration
+		HT=3070; // ft
+		BT=ApogeePrediction(ALTREFINE,V,HT);
+		// If the Prediction is lower than HT
+		*Brake1=1;
+		brake1Write();
+}
 	else if ((ALTREFINE>=H2) && (*Brake2==0)){
 		HT=3025; // ft
-	BT=ApogeePrediction(ALTREFINE,V,HT);
-	// Include in this function the turn on key
-	*Brake2=1;
-	brake2Write();
+		BT=ApogeePrediction(ALTREFINE,V,HT);
+		// Include in this function the turn on key
+		*Brake2=1;
+		brake2Write();
 }
 	else if ((ALTREFINE>=H3) && (*Brake3==0)){
 		HT=3000; // ft
-	BT=ApogeePrediction(ALTREFINE,V,HT);
-
-	// Include in this function the turn on 
-	*Brake3=1;
-	brake3Write();
+		BT=ApogeePrediction(ALTREFINE,V,HT);
+		// Include in this function the turn on 
+		*Brake3=1;
+		brake3Write();
 }
 	else {
-	BT=0;
+		BT=0;
 	}
 
 return BT;
@@ -539,19 +528,19 @@ double ApogeePrediction( double ALTREFINE, double V, double HT) {
 	//FrontArea			// Frontal area of rocket				-internal logic
 	//BT 				// Braking Time ms					-output
 	
-	// internal logic variable declarations
-	MassE=50; // True mass is 26.5 some   lb //Change this<-------------------------------------------
+		// internal logic variable declarations
+	
+	MassE=50; // True mass is 26.5 some lb //Change this<-------------------------------------------
 	G=32; // ft/s
 	
-	//drag equation
 	FrontArea=.78; //ft^2
-	D=.85*((0.0023769*V*V)/2)*FrontArea;
+	D=.85*((0.0023769*V*V)/2)*FrontArea;	//drag equation
 	ACC=D/MassE;
 	
 	
 	
 	
-	// double check the drag equation here. cause its just kinda arbitrary
+		// double check the drag equation here. cause its just kinda arbitrary
 	NRG1= MassE*G*ALTREFINE;
 	NRG2= MassE*G*HT;
 	Vout= sqrt(((NRG2-NRG1)*2)/MassE);         // DOUBLE CHECK THE MATH HERE

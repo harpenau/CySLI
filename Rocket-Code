@@ -419,11 +419,11 @@ void getAcc(){
 }
 
 void mpuSetup(){
-     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
+    if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
-    #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
+    elseif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
         Fastwire::setup(400, true);
-    #endif
+    else
     mpu.initialize();
     mpu.setFullScaleAccelRange(2);  //0=2g, 1=4g, 2=8g, 3=16g
     mpu.setFullScaleGyroRange(2); //0=250 deg/s, 1=500 deg/s, 2=1000 deg/s, 3=2000 deg/s 

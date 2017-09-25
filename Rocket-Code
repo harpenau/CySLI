@@ -440,24 +440,25 @@ double kalman(double UnFV,double FR1,double *Pold){
 	double Q,R; 
 		Q=0.1;
 		R=0.2;      // defined these from the Matlab code
+		
 	// inputs are Unfiltered Response, Filtered  response, Prediction value old
 	// Q and R are sensor specific values (probably)
 	// make sure to predefine P and possibly other values at the beginning of the main code. starts at 1
 
-	//UnFV		    	// unfiltered value from sensors read in (zn)						-internal logic
-	//FR1               // read this variable in from main (AX(i)) defined last iteration	-internal logic
-	//Pold    			// output Pold and read in Pold from last iteration					-input,output
-	//Q					// sensor specific value, we might default this						-input
-	//R					// sensor specific value, we might default this						-input
+	//UnFV		   // unfiltered value from sensors read in (zn)			-internal logic
+	//FR1              // read this variable in from main (AX(i)) defined last iteration	-internal logic
+	//Pold    	   // output Pold and read in Pold from last iteration			-input,output
+	//Q		   // sensor specific value, we might default this			-input
+	//R		   // sensor specific value, we might default this			-input
 	//A					
 	
-	Prediction= A*FR1 +B*un; // State Prediction 		(Predict where we're goning to be)
+	Prediction= A*FR1 +B*un; 	 // State Prediction 		(Predict where we're goning to be)
 	P=A*(*Pold)*A +Q;		 // Covariance Prediction 	(Predict how much error)
-	y=UnFV-H*Prediction;	 // Innovation  			(Compare reality against prediction)
+	y=UnFV-H*Prediction;		 // Innovation  		(Compare reality against prediction)
 	S= H*P*H +R;			 // innovation Covariance 	(Compare real error against prediction)
-	K=(P*H)/S;				 //Kalman Gain 				(Moderate the prediction)
-	FR2=Prediction+K*y;		 //state update 			(New estimate of where we are)
-	(*Pold)=(1-K*H)*P;		 //Covariance update 		(New estimate of error)
+	K=(P*H)/S;			 // Kalman Gain 		(Moderate the prediction)
+	FR2=Prediction+K*y;		 // state update 		(New estimate of where we are)
+	(*Pold)=(1-K*H)*P;		 // Covariance update 		(New estimate of error)
 	
 	return FR2;
 	
@@ -528,13 +529,13 @@ double ApogeePrediction( double ALTREFINE, double V, double HT) {
 	//FrontArea			// Frontal area of rocket				-internal logic
 	//BT 				// Braking Time ms					-output
 	
-		// internal logic variable declarations
+	// internal logic variable declarations
 	
-	MassE=50; // True mass is 26.5 some lb //Change this<-------------------------------------------
+	MassE=50; // True mass is 26.5 some lb // Change this<-------------------------------------------
 	G=32; // ft/s
 	
 	FrontArea=.78; //ft^2
-	D=.85*((0.0023769*V*V)/2)*FrontArea;	//drag equation
+	D=.85*((0.0023769*V*V)/2)*FrontArea;	// drag equation
 	ACC=D/MassE;
 	
 	
@@ -545,8 +546,8 @@ double ApogeePrediction( double ALTREFINE, double V, double HT) {
 	NRG2= MassE*G*HT;
 	Vout= sqrt(((NRG2-NRG1)*2)/MassE);         // DOUBLE CHECK THE MATH HERE
 
-	BT=(V-Vout)/(ACC+32);      // this is for drag     // BT should be in seconds
-	BT=BT*1000; 	// convert to milliseconds
+	BT=(V-Vout)/(ACC+32);      // This is for drag     // BT should be in seconds
+	BT=BT*1000; 	// Convert to milliseconds
 	
 	//BT=3000;	//<-----------------------------------------------------------------
 	if (BT>0){

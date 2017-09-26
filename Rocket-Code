@@ -293,9 +293,9 @@ void closeServo(){
   do{
 	
 	pos -= 10;
-	//140degree                      // in steps of 5 degree 
-	servo.write(pos);              // tell servo to go to position in variable 'pos' 
-	delay(20);    					// waits 15ms for the servo to reach the position 
+	//140degree                     // in steps of 5 degree 
+	servo.write(pos);               // tell servo to go to position in variable 'pos' 
+	delay(15);    			// waits 15ms for the servo to reach the position (servo speed in the past) 
 	}while(pos >0);
 	}
 	/*for(pos; pos <= 0; pos--){
@@ -311,7 +311,7 @@ if (pos<200){
 	pos += 10;
 	//140degree                     // in steps of 5 degree 
 	servo.write(pos);               // tell servo to go to position in variable 'pos' 
-	delay(20);    			// waits 15ms for the servo to reach the position 
+	delay(20);    			// waits 15ms for the servo to reach the position (servo speed in the past) 
 	}while(pos <=150);
 } 
 	/*for(pos; pos >= 200; pos++){
@@ -419,14 +419,15 @@ void getAcc(){
 }
 
 void mpuSetup(){
-    if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
+	//join I2C bus (I2Cdev library doesn't do this automatically)
+    #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
-    elseif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
+    #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
         Fastwire::setup(400, true);
-    else
+    #endif
     mpu.initialize();
-    mpu.setFullScaleAccelRange(2);  //0=2g, 1=4g, 2=8g, 3=16g
-    mpu.setFullScaleGyroRange(2); //0=250 deg/s, 1=500 deg/s, 2=1000 deg/s, 3=2000 deg/s 
+    mpu.setFullScaleAccelRange(2);	// 0=2g, 1=4g, 2=8g, 3=16g
+    mpu.setFullScaleGyroRange(2);	// 0=250 deg/s, 1=500 deg/s, 2=1000 deg/s, 3=2000 deg/s 
     calibrateMPU();
 }
 
@@ -541,15 +542,13 @@ double ApogeePrediction( double ALTREFINE, double V, double HT) {
 	
 	
 	
-		// double check the drag equation here. cause its just kinda arbitrary
 	NRG1= MassE*G*ALTREFINE;
 	NRG2= MassE*G*HT;
-	Vout= sqrt(((NRG2-NRG1)*2)/MassE);         // DOUBLE CHECK THE MATH HERE
+	Vout= sqrt(((NRG2-NRG1)*2)/MassE);         // Double Check Math
 
 	BT=(V-Vout)/(ACC+32);      // This is for drag     // BT should be in seconds
 	BT=BT*1000; 	// Convert to milliseconds
 	
-	//BT=3000;	//<-----------------------------------------------------------------
 	if (BT>0){
 	openServo(); // this will open the servo for this iteration if necessary this should be the only way to open the brakes
 	
@@ -602,7 +601,7 @@ void BrakingLoop(unsigned long TimeSinceLaunch, int PoweredTime, int *BT){     /
 		TimeStepStart=millis();
 			do{
 			
-			TimeStep=millis()-TimeStepStart;
+			TimeStep=millis()-TimeStepStart; //total time open
 			getAcc();
 			getAlt();
 			writeData();

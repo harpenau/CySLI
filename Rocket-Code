@@ -1,64 +1,77 @@
-//formatting rules:
-//{ on same line
-//multicomment lines go above line
-//single line comments on same line and tabbed 
-//for function:what it does, name inputs and outputs define
+// formatting rules:
+// 1) { on same line as statement
+// 	ex: if (condition) {
+// 2) multicomment lines go above line
+// 	ex: // comment
+//	    // comment continued
+//	    variable = 0;
+// 3) single line comments on same line, tabbed and spaced
+// 	ex: variable = 0;	// comment
+// 4) for function:what it does, name inputs and outputs with definition
+// 	ex: see ApogeePrediction()
+// 5) variables have camel case starting with lowercase
+// 	ex: helloWorld = 0;
+// 6) functions have camel case starting with uppercase
+// 	ex: HelloWorld()
 
-#include "I2Cdev.h"
-#include "MPU6050.h"
-#include "Wire.h"
-#include <SFE_BMP180.h>
-#include <Servo.h>
-#include <SPI.h>
-#include <SD.h>
+#include "I2Cdev.h"		// provides simple and intuitive interfaces to I2C devices
+#include "MPU6050.h"		// IMU library
+#include "Wire.h"		// allows you to communicate with I2C / TWI devices
+#include <SFE_BMP180.h>		// pressure/temp sensor library
+#include <Servo.h>		// servo library
+#include <SPI.h>		// Serial Peripheral Interface(SPI) used for communicating with one or more peripheral devices quickly over short distances
+#include <SD.h>			// microSD card library
 
+#define R 1716  		// (ft*lb)/(slug*degree_R) 
+#define g 32.174		// ft/s^2
 
-#define R 1716  //(ft*lb)/(slug*degree_R) 
-#define g 32.174  //ft/s^2
+int pos=0;			// postition of the servo (degrees?)
 
-//Servo Values
-int pos=0,verticalDetect=0, startPos = 0, setupDetect = 0;
+//These are not all on the same line to comment them
+double AxPrev = 0;		// previous x acceleration
+double PnextAx = 0;		// prediction of next x acceleration for kalman filter, used exclusively in the kalman function
+double PnextALT = 0; 		// prediction of next altitude for kalman filter, used exclusively in the kalman function
+double alt_prev = 0; 		// saved altitude from previous loop
+double alt_refine;		// smoothed altitude
+double Ax;			// smoothed x acceleration
+double VelocityNew;		// added or subtracted velocity since last loop
+double Velocity;		// current velocity
+double OldVelocity = 0;		// saved velocity from previous loop
+double PositionNew;		// integrated velocity since last loop
+double Position = 0;		// current position
+double ALTREFINE;		// no different than alt_refine, delete
+double velocityBMP = 0;		// velocity from BMP, derived from position
+double baseline; 		// baseline pressure
 
-//variables 
-int 	PoweredTime, OldaccX, BT = 0, H1, H2, H3, launchDetect = 0, Brake3 = 0, Brake2 = 0, Brake1 = 0; 
-// H1,H2,H3,Brake1,2,3 will be deleted, Probably launchDetect too
-
-double  Xprev = 0, PnextAx = 0, PnextALT = 0, alt_prev = 0, alt_refine, Ax;
-double  VelocityNew, Velocity, OldVelocity = 0, PositionNew, Position = 0,ALTREFINE;
-double  slopeVelocity = 0;
-double rho = 0, q = 0;
-
-unsigned long T=0,TimeOfLaunch=0,TimeSinceLaunch=0;
-unsigned long time=0;    // this is a variable
-unsigned long OldTime=0; // this is a variable
+unsigned long T=0,		//
+unsigned long TimeOfLaunch=0;	// time of launch detection, probably deleteable
+unsigned long TimeSinceLaunch=0;// time since launch, probably deleteable
+unsigned long time=0;   	// current time(stationary once called?), used for integration and derivation
+unsigned long OldTime=0;	// time at end of loop (stationary once called?)
 
 
 //Objects
 SFE_BMP180 bmp;
 MPU6050 mpu;
 Servo servo;
+File dataFile;			// the datafile variable to save stuff to microSD
 
-File dataFile;
 
-double baseline; // baseline pressure
 
 //MPU 6050 Accelerations
-int16_t accX, accY, accZ; //assigns 16 bit signed integers, used for balence of precision and speed
-
-//MPU 6050 gyro measurements
-int16_t wX, wY, wZ; //assigns 16 bit signed integers, used for balence of precision and speed
-
+int16_t accX, accY, accZ; 	// unfiltered accelerations, assigns 16 bit signed integers, used for balence of precision and speed
 
 //BMP180 Altitude
-double altitude;
+double altitude;		// yup
 
 void setup() {
-  mpuSetup();
+  mpuSetup();			// all aptly named
   bmpSetup();
   serialSetup();
   servoSetup();
-  SDcardSetup(); //set up sd card to read RC data
-  SDcardWriteSetup(); //setup sd card to write data to
+  //SDcardSetup(); 		//set up sd card to read RC data
+  SDcardWriteSetup(); 		//setup sd card to write data to
+  
 }
 
 void loop() { // run code ( main code)
@@ -76,70 +89,48 @@ void loop() { // run code ( main code)
 T=millis(); // this is needed to distinguish from time in brakingloop
 TimeSinceLaunch=T-TimeOfLaunch;  
 
-
-/*
+/*(tanner)
 PoweredTime=2300; 	//NO
 write a function to recognize when the engine turns off aka when the acceleration turns negative
 */
 
-BrakingLoop(TimeSinceLaunch,PoweredTime,&BT);
+BrakingLoop(TimeSinceLaunch,PoweredTime,&BT);		//in the process of being changed
+
+time=millis();  					// current time for measurements
+getAcc(); 						// Updates accX,accY,accZ
+getAlt(); 						// Updates altitude
+
+(Ax)=kalman(accX,    AxPrev,   &PnextAx); 		// calls the kalman filter to refine acceleration in the X direction
+(alt_refine)=kalman(altitude,alt_prev, &PnextALT); 	// refines altitude 
 
 
-/*
-PoweredTime=2300; 	//NO
-write a function to recognize when the engine turns off aka when the acceleration turns negative
-*/
-
-BrakingLoop(TimeSinceLaunch,PoweredTime,&BT);
-
-time=millis();  // current time for measurements
-getAcc(); 		// Updates accX,accY,accZ
-getAlt(); 		// Updates altitude
-
-(Ax)=kalman(accX,    Xprev,   &PnextAx); 
-
-(alt_refine)=kalman(altitude,alt_prev, &PnextALT); 
-
-//2 forms of getting velocity
-//Velocity from BMP
-slopeVelocity=SlopeVelocity(OldTime,time,alt_prev,alt_refine);//deriving velocity from position
-//wtf? slopeVelocity is the derivative of position from the bmp,so we have 2 measures of velocity, we should fuse them somehow 
-
-//Velocity from gyro
-VelocityNew=integrate(OldTime,time,Xprev,Ax);// integrating acceleration to get velocity
-OldVelocity=Velocity;
-Velocity=Velocity+VelocityNew;
+velocityBMP=Derive(OldTime,time,alt_prev,alt_refine); 			// deriving velocity from position from BMP
+VelocityNew=integrate(OldTime,time,AxPrev,Ax);				// integrating acceleration from MPU since last measurement to get velocity
+OldVelocity=Velocity;							// still need the now old velocity to find position at that time 
+Velocity=Velocity+VelocityNew;						// calculates the now new velocity
+PositionNew=integrate(OldTime,time,OldVelocity,Velocity);		// integration to find position from MPU
+Position=Position+PositionNew;  					// Position is defined as 0 at start 
 
 
-PositionNew=integrate(OldTime,time,OldVelocity,Velocity);// integration to find position
-Position=Position+PositionNew;  // Position is defined as 0 at start 
+OldTime=time;		// ms, reassigns time for lower bound at next integration cycle (move this to top of loop to eliminate any time delays between time and oldTime to have a better integration and derivation?)
+AxPrev=Ax;		// reassigns Ax for initial acceleration at next integration cycle  
+alt_prev=alt_refine;  	// reassigns alt_refine for initial altitude at next derivation
 
-// reassign the acceleration values to oldACCx,oldACCz,oldACCy, time too
-OldaccX=accX ;			//OldaccX assigned 0 at start
-OldTime=time;//ms		//OldTime assigned 0 at start
-Xprev=Ax;				//Xprev will be started at 0   
-alt_prev=alt_refine;  	//alt_prev will started at 0 in definitions
-
-// look at averaging the values for altitude ( for the testing on March 8th we will use the BMP for testing)
 ALTREFINE=alt_refine;
 
-H1=1500;   //these are the heights that we will start the braking 
-H2=2400;
-H3=2750;
-if (TimeSinceLaunch>PoweredTime){
-BT=ApogeeCall(ALTREFINE,H1,H2,H3,slopeVelocity,&Brake1,&Brake2,&Brake3);
+if (TimeSinceLaunch>PoweredTime) {
+	BT=ApogeeCall(ALTREFINE,H1,H2,H3,velocityBMP,&Brake1,&Brake2,&Brake3); //will be reworked
+}
+//These two will be rewritten into one 
+FreefallDetection(accX,accY,Brake3); 	
+Abort(launchDetect);			
 
-FreefallDetection(accX,accY,Brake3);// Freefall
- 
-Abort(launchDetect);//Abortion
-
-writeData();
+writeData();	// writes all pertinent data
 
 }
 //--------------------------------------------------------------Beginning of the Functions---------------------------------------------
  
 //--------------------------------------------------------------SD Card Functions------------------------------------------------------
-
 void SDcardSetup(){
 	pinMode(4, OUTPUT);
   	SD.begin(4);  
@@ -167,7 +158,7 @@ void writeData(){
  dataFile.print(",");
  dataFile.print(Ax);
  dataFile.print(",");
- dataFile.println(slopeVelocity);
+ dataFile.println(derive);
  dataFile.close();
 }
 
@@ -216,10 +207,8 @@ void serialSetup(){
 //-----------------------------------------------------------Servo Methods--------------------------------------------------------------                                   
 						Adjust this to the current settings?
 void servoSetup(){
-
-  servo.attach(9); //attaches Servo variable to pin 9
-  servo.write(0); //resets Servo to inital position, angle 0
-
+  servo.attach(9);
+  servo.write(0);
 }
 
 void closeServo(){
@@ -266,8 +255,7 @@ double getPressure(){
   // If request is unsuccessful, 0 is returned.
 
   status = bmp.startTemperature();
-  if (status != 0)
-  {
+  if (status != 0) {
     // Wait for the measurement to complete:
 
     delay(status);
@@ -278,16 +266,14 @@ double getPressure(){
     // Function returns 1 if successful, 0 if failure.
 
     status = bmp.getTemperature(T);
-    if (status != 0)
-    {
+    if (status != 0) {
       // Start a pressure measurement:
       // The parameter is the oversampling setting, from 0 to 3 (highest res, longest wait).
       // If request is successful, the number of ms to wait is returned.
       // If request is unsuccessful, 0 is returned.
 
-      status = bmp.startPressure(3);
-      if (status != 0)
-      {
+      status = bmp.startPressure(3);	// is this worth it to go 3?
+      if (status != 0) {
         // Wait for the measurement to complete:
         delay(status);
 
@@ -299,8 +285,7 @@ double getPressure(){
         // Function returns 1 if successful, 0 if failure.
 
         status = bmp.getPressure(P,T);
-        if (status != 0)
-        {
+        if (status != 0) {
           return(P);
         }
         else Serial.println("error retrieving pressure measurement\n");
@@ -340,8 +325,8 @@ void getAcc(){
 }
 
 void mpuSetup(){
-
-    #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE //defines how to setup sensor with certain hardware config
+    //????????? 
+    #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
     #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
         Fastwire::setup(400, true);
@@ -366,12 +351,13 @@ double kalman(double UnFV,double FR1,double *Pold){
 	// Q and R are sensor specific values (probably)
 	// make sure to predefine P and possibly other values at the beginning of the main code. starts at 1
 
-	//UnFV		    	// unfiltered value from sensors read in (zn)						-internal logic
-	//FR1               // read this variable in from main (AX(i)) defined last iteration	-internal logic
-	//Pold    			// output Pold and read in Pold from last iteration					-input,output
-	//Q					// sensor specific value, we might default this						-input
-	//R					// sensor specific value, we might default this						-input
+	//UnFV		// unfiltered value from sensors read in (zn)						-internal logic
+	//FR1           // read this variable in from main (AX(i)) defined last iteration			-internal logic
+	//Pold    	// output Pold and read in Pold from last iteration					-input,output
+	//Q		// sensor specific value, we might default this						-input
+	//R		// sensor specific value, we might default this						-input
 	//A					
+	//FR2
 	
 	Prediction= A*FR1 +B*un; // State Prediction 		(Predict where we're goning to be)
 	P=A*(*Pold)*A +Q;		 // Covariance Prediction 	(Predict how much error)
@@ -384,7 +370,7 @@ double kalman(double UnFV,double FR1,double *Pold){
 	return FR2;  
 }
 
-double ApogeeCall(double ALTREFINE,int H1, int H2, int H3, double V,int *Brake1, int *Brake2,int *Brake3){
+double ApogeeCall(double ALTREFINE,int H1, int H2, int H3, double V,int *Brake1, int *Brake2,int *Brake3){//taylor
 	
 	//this will be completely rewritten
 	
@@ -395,13 +381,12 @@ double ApogeeCall(double ALTREFINE,int H1, int H2, int H3, double V,int *Brake1,
 	// we want to make a code that will still deploy air brakes if we accidentally exceed an altitude
 	// without deploying the brakes
 	
-	// ALTREFINE  		//Mediated result from the BMP and MPU					-input
-	// H1, H2 ,H3 		//Altitudes that we want to check what's going on         -input  <-- delete if using active prediction method instead?
-	// V, 				//Current velocity									-input
-	// BT				//Time brakes will be deployed							-output			
+	// ALTREFINE  is the mediated result from the BMP and MPU					-input
+	// H1, H2 ,H3 are altitudes that we want to check what's going on           			-input 
+	// V, Current velocity										-input
+	// BT is the time brakes will be deployed							-output			
 	// ALTREFINE=2001;???
-	// BrakeN 			//counter to ensure only one braking cycle per section	-internal logic
-
+	// BrakeN is a counter to ensure only one braking cycle per section.				-internal logic
 
 
 if ( (*Brake1==0) && (ALTREFINE >= H1)){
@@ -441,21 +426,23 @@ double ApogeePrediction( double ALTREFINE, double V, double HT) {
 	double NRG1,NRG2,Vout,ACC,FrontArea,D,BT;
 	int MassE,G;
 	
-	//Hn               	// Current Height value				  -input
-	//HT				    // Height of Target apogee				  -input
-	//V				    // Velocity in ft/s					  -input
-	//G 		   	 	    // Value of gravity in ft/s^2			  -internal logic
-	//MassE				// Mass of rocket Empty				  -internal logic
-	//NRG1				// Current Energy of rocket			  -internal logic
-	//NRG2				// Desired Energy of rocket			  -internal logic
-	//Vout				// Velocity we need to be at currently	  -internal logic
-	//ACC				// Acceleration due to drag and Gravity	  -internal logic
-	//D				    // Drag Force							  -internal logic
-	//FrontArea			// Frontal area of rocket				  -internal logic
-	//BT 				// Braking Time ms					  -output
+	//Hn             	// Current Height value				-input
+	//HT			// Height of Target apogee			-input
+	//V			// Velocity in ft/s				-input
+	//MassE			// Mass of rocket Empty				-internal logic
+	//NRG1			// Current Energy of rocket			-internal logic
+	//G 		   	// Value of gravity in ft/s^2			-internal logic
+	//NRG2			// Desired Energy of rocket			-internal logic
+	//Vout			// Velocity we need to be at currently		-internal logic
+	//ACC			// Acceleration due to drag and Gravity		-internal logic
+	//D			// Drag Force					-internal logic
+	//FrontArea		// Frontal area of rocket			-internal logic
+	//BT 			// Braking Time ms				-output
+	//BT			// Braking time(s)				-output
 	
 	// internal logic variable declarations
 	MassE=50; // True mass is 26.5 some   lb //Change this<----------------------------------------------------------------------------------
+	G=32; // ft/s
 	
 	//drag equation
 	FrontArea=.78; //ft^2
@@ -477,24 +464,28 @@ double ApogeePrediction( double ALTREFINE, double V, double HT) {
    return BT;
 }
 
-/* function requires two times, and two  data points */
 double integrate(unsigned long time1, unsigned long time2, double Val1, double Val2) {
 
-	double Time2, Time1, deltaT, deltaA, Area;
+	//function requires two times, and two  data points
+
+	double Time2, Time1;
 	Time2=time2/1000;
 	Time1=time1/1000;
 
-	//Area				     //result of integration  	    -output
-	//Val1					//input of initial value	    -input
-	//Val2					//input of secondary inital    -input
-	//deltaT					//change in time			    -internal logic
-	//deltaA					//change in Acceleration	    -internal logic
-	//time1					//time previous				-input
-	//time2					//time current				-input
-	   
+	//Area				//result of integration  		-output
+	//Val1				//input of initial value		-input
+	//Val2				//input of secondary inital 	-input
+	//deltaT				//change in time				-internal logic
+	//deltaA				//change in value				-internal logic
+	//time2				//time previous				-input
+	//time1				//time current				-input
+
+
+	double deltaT, deltaA;     // declares Change in time, Change in Acceleration
+	double Area; 		   // declares Final Area
 	deltaT = Time2-Time1;      // computes deltaT
 	deltaA = (Val2+Val1)/2;    // computes deltaA
-	Area = deltaT*deltaA; 	    // computes Area
+	Area = deltaT*deltaA; 	   // computes Area
 	
 	return Area; 
 }	
@@ -503,11 +494,10 @@ void BrakingLoop(unsigned long TimeSinceLaunch, int PoweredTime, int *BT){     /
 
 // this will need to be rewritten to recognize when motor runs out aka when acceleration turns negative
 
-	//TimeSinceLaunch			// Time since launch detection					-input 
-	//PoweredTime 		    	// The time that the motor will burn (ms)		-input (also for internal logic
-	//BT					    // The braking time duration that  (ms)			-input	/ output with pointer		
-	//TimeStep				    // time since Breaking started				-internal logic
-	
+	//TimeSinceLaunch				// Time since launch detection					-input 
+	//PoweredTime 		    		// The time that the motor will burn (ms)		-input (also for internal logic)
+	//BT							// The braking time duration that  (ms)			-input/output with pointer		
+	//TimeStep					// time since Breaking started					-internal logic
 	int TimeStep,TimeStepStart;
 	if (TimeSinceLaunch>PoweredTime){
 		if (*BT>0){
@@ -518,19 +508,19 @@ void BrakingLoop(unsigned long TimeSinceLaunch, int PoweredTime, int *BT){     /
 				getAcc();
 				getAlt();
 				writeData();
-				if (TimeStep>=*BT){
+					if (TimeStep>=*BT){
 					closeServo(); 		// Closing the brakes state   will call on function  this will be the only closing function
 					TimeStep=0;  		// Resetting the counter
 					*BT=0    ;			// Reset the Braking time to 0 (this is a back up procedure)
-				}
+					}
 			}while(*BT>0);
 		}
 
 	}
 
-  }
+}
 
-void FreefallDetection(int accX,int accY,int Brake3){
+void FreefallDetection(int accX,int accY,int Brake3){//tanner
 int freefallDetect;
 	if ((accX <= 1 && accX >= -50)&&(Brake3==1)){ 
 		freefallDetect=1;
@@ -548,7 +538,7 @@ int freefallDetect;
 
 unsigned long LaunchDetection(int *launchDetect){
  
- //TimeOfLaunch 			    //The time on global clock when launch is detected		-output
+ //TimeOfLaunch 			//The time on global clock when launch is detected		-output
  //launchDetect				// conditional for operating 
  
  unsigned long TimeOfLaunch;
@@ -567,7 +557,7 @@ unsigned long LaunchDetection(int *launchDetect){
 	} 
 }
 		
-void Abort(int launchDetect){
+void Abort(int launchDetect){//tanner
  
 	int abortDetect=0;
 	getAcc();
@@ -580,14 +570,17 @@ void Abort(int launchDetect){
 			getAlt();
 			delay(200);
 			writeData();
-		} while(abortDetect==1);
+			}
+		while(abortDetect==1);
 	}			
 }
-
-double SlopeVelocity(unsigned long OldTime, unsigned long time, double alt_prev, double alt_refine){
+	
+double Derive(unsigned long OldTime, unsigned long time, double alt_prev, double alt_refine){
 	double Slope,OldTimeDouble,timeDouble;
 	OldTimeDouble=OldTime;
 	timeDouble=time;
 	Slope=((alt_refine-alt_prev)/((timeDouble/1000)-(OldTimeDouble/1000)));
 	return Slope;
 }
+
+

@@ -78,6 +78,8 @@ void setup() {
 void loop() { // run code ( main code)
 // and so we begin
 
+	burnout();
+	endGame();   
 	// Launch detection have the getAcc built in 
 	if(launchDetect==0){// this is probably redundant in the function, we could take the function one  //JK 
 		(TimeOfLaunch)=LaunchDetection(&launchDetect);
@@ -121,10 +123,7 @@ ALTREFINE=alt_refine;
 
 if (TimeSinceLaunch>PoweredTime) {
 	BT=ApogeeCall(ALTREFINE,H1,H2,H3,velocityBMP,&Brake1,&Brake2,&Brake3); //will be reworked
-}
-//These two will be rewritten into one 
-FreefallDetection(accX,accY,Brake3); 	
-Abort(launchDetect);			
+}		
 
 writeData();	// writes all pertinent data
 
@@ -558,23 +557,6 @@ unsigned long LaunchDetection(int *launchDetect){
 	} 
 }
 		
-void Abort(int launchDetect){//tanner
- 
-	int abortDetect=0;
-	getAcc();
-	if ((launchDetect==1) && ( (abs(accY)>=32 ) || (abs(accZ)>=32))){
-		abortWrite();
-		abortDetect=1;
-		closeServo();
-		do{
-			getAcc();
-			getAlt();
-			delay(200);
-			writeData();
-			}
-		while(abortDetect==1);
-	}			
-}
 	
 double Derive(unsigned long OldTime, unsigned long time, double alt_prev, double alt_refine){
 	double Slope,OldTimeDouble,timeDouble;

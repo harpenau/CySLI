@@ -26,6 +26,7 @@
 #define g 32.174		// ft/s^2
 
 int pos=0;			// postition of the servo (degrees?)
+int Burnout = 0;	//current status of motor (0 = motor active)
 
 //These are not all on the same line to comment them
 double AxPrev = 0;		// previous x acceleration
@@ -581,6 +582,52 @@ double Derive(unsigned long OldTime, unsigned long time, double alt_prev, double
 	timeDouble=time;
 	Slope=((alt_refine-alt_prev)/((timeDouble/1000)-(OldTimeDouble/1000)));
 	return Slope;
+}
+
+void burnout(){
+
+	/* Detects when the vertical acceleration is negative. Holds arduino hostage until it's satisfied*/
+	
+	//accX		//vertical acceleration				//input
+	//Burnout	//0 when motor is on, 1 afterwards	//output
+	
+	while(Burnout == 0){
+		getAcc();				//updates acceleration values
+		if(accX <= -(g+2.0))	//checks if vertical acceleration is <= ~ -30
+			Burnout = 1;
+	}
+	
+}
+
+void endGame(){
+	
+	/* Checks if apogee has been reached or if the rocket is on a poor trajectory. 
+	If so, the brakes will permanently close and data will be logged until end of flight*/
+	
+	//slopeVelocity		//current velocity of rocket from BMP altitude.		//input
+	//Burnout			//int indicator of motor burnout					//input
+	
+	if((slopeVelocity < 0 && Burnout == 1) || ( abs(accY)>=32  || abs(accZ)>=32)){
+		if(slopeVelocity < 0){	
+			freefallWrite();		//checks what to write to log file
+		}else{
+			abortWrite();
+		}
+		
+		closeServo();				//close brakes
+		
+		while(true){ 				//brakes closed, flight data will be logged until compputer is turned off
+			time = millis();
+			getAcc();
+			getAlt();
+			alt_refine=kalman(altitude,alt_prev, &PnextALT); 
+			slopeVelocity = SlopeVelocity(OldTime,time,alt_prev,alt_refine);
+			OldTime=time;
+			alt_prev=alt_refine;
+			delay(100);
+			writeData();
+		}
+	} 
 }
 
 

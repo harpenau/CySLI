@@ -1,57 +1,66 @@
-//formatting rules:
-//{ on same line
-//multicomment lines go above line
-//single line comments on same line and tabbed 
-//for function:what it does, name inputs and outputs define
+// formatting rules:
+// 1) { on same line as statement
+// 	ex: if (condition) {
+// 2) multicomment lines go above line
+// 	ex: // comment
+//	    // comment continued
+//	    variable = 0;
+// 3) single line comments on same line, tabbed and spaced
+// 	ex: variable = 0;	// comment
+// 4) for function:what it does, name inputs and outputs with definition
+// 	ex: see ApogeePrediction()
+// 5) variables have camel case starting with lowercase
+// 	ex: helloWorld = 0;
+// 6) functions have camel case starting with uppercase
+// 	ex: HelloWorld()
 
-#include "I2Cdev.h"
-#include "MPU6050.h"
-#include "Wire.h"
-#include <SFE_BMP180.h>
-#include <Servo.h>
-#include <SPI.h>
-#include <SD.h>
+#include "I2Cdev.h"		// provides simple and intuitive interfaces to I2C devices
+#include "MPU6050.h"		// IMU library
+#include "Wire.h"		// allows you to communicate with I2C / TWI devices
+#include <SFE_BMP180.h>		// pressure/temp sensor library
+#include <Servo.h>		// servo library
+#include <SPI.h>		// Serial Peripheral Interface(SPI) used for communicating with one or more peripheral devices quickly over short distances
+#include <SD.h>			// microSD card library
 
+#define R 1716  		// (ft*lb)/(slug*degree_R) 
+#define g 32.174		// ft/s^2
 
-#define R 1716  //(ft*lb)/(slug*degree_R) 
-#define g 32.174  //ft/s^2
+int pos=0;			// postition of the servo (degrees?)
+int Burnout = 0;	//current status of motor (0 = motor active)
 
-//Servo Values
-int pos=0,verticalDetect=0;
-int startPos=0,setupDetect=0;
+//These are not all on the same line to comment them
+double AxPrev = 0;		// previous x acceleration
+double PnextAx = 0;		// prediction of next x acceleration for kalman filter, used exclusively in the kalman function
+double PnextALT = 0; 		// prediction of next altitude for kalman filter, used exclusively in the kalman function
+double alt_prev = 0; 		// saved altitude from previous loop
+double alt_refine;		// smoothed altitude
+double Ax;			// smoothed x acceleration
+double VelocityNew;		// added or subtracted velocity since last loop
+double Velocity;		// current velocity
+double OldVelocity = 0;		// saved velocity from previous loop
+double PositionNew;		// integrated velocity since last loop
+double Position = 0;		// current position
+double ALTREFINE;		// no different than alt_refine, delete
+double velocityBMP = 0;		// velocity from BMP, derived from position
+double baseline; 		// baseline pressure
 
-//variables 
-int 	PoweredTime, OldaccX, BT = 0, H1, H2, H3, launchDetect = 0, Brake3 = 0, Brake2 = 0, Brake1 = 0; 
-// H1,H2,H3,Brake1,2,3 will be deleted, Probably launchDetect too
-
-double  Xprev = 0, PnextAx = 0, PnextALT = 0, alt_prev = 0, alt_refine, Ax;
-double  VelocityNew, Velocity, OldVelocity = 0, PositionNew, Position = 0,ALTREFINE;
-double  slopeVelocity = 0;
-double rho = 0, q = 0;
-
-unsigned long T=0,TimeOfLaunch=0,TimeSinceLaunch=0;
-unsigned long time=0;    // this is a variable
-unsigned long OldTime=0; // this is a variable
-
+unsigned long T=0,		//
+unsigned long TimeOfLaunch=0;	// time of launch detection, probably deleteable
+unsigned long TimeSinceLaunch=0;// time since launch, probably deleteable
+unsigned long time=0;   	// current time(stationary once called?), used for integration and derivation
+unsigned long OldTime=0;	// time at end of loop (stationary once called?)
 
 //Objects
 SFE_BMP180 bmp;
 MPU6050 mpu;
 Servo servo;
-
-File dataFile;
-
-double baseline; // baseline pressure
+File dataFile;			// the datafile variable to save stuff to microSD
 
 //MPU 6050 Accelerations
-int16_t accX, accY, accZ; //assigns 16 bit signed integers, used for balence of precision and speed
-
-//MPU 6050 gyro measurements
-int16_t wX, wY, wZ; //assigns 16 bit signed integers, used for balence of precision and speed
-
+int16_t accX, accY, accZ; 	// unfiltered accelerations, assigns 16 bit signed integers, used for balence of precision and speed
 
 //BMP180 Altitude
-double altitude;
+double altitude;		// yup
 
 void setup() {
   mpuSetup();

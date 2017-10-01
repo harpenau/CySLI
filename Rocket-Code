@@ -110,9 +110,7 @@ getAlt(); 		// Updates altitude
 (alt_refine)=kalman(altitude,alt_prev, &PnextALT); 
 
 //2 forms of getting velocity
-//Velocity from BMP
-slopeVelocity=SlopeVelocity(OldTime,time,alt_prev,alt_refine);//deriving velocity from position
-//wtf? slopeVelocity is the derivative of position from the bmp,so we have 2 measures of velocity, we should fuse them somehow 
+velocityBMP=SlopeVelocity(OldTime,time,alt_prev,alt_refine);//deriving velocity from position
 
 //Velocity from gyro
 VelocityNew=integrate(OldTime,time,Xprev,Ax);// integrating acceleration to get velocity
@@ -136,7 +134,7 @@ H1=1500;   //these are the heights that we will start the braking
 H2=2400;
 H3=2750;
 if (TimeSinceLaunch>PoweredTime){
-BT=ApogeeCall(ALTREFINE,H1,H2,H3,slopeVelocity,&Brake1,&Brake2,&Brake3);
+BT=ApogeeCall(ALTREFINE,H1,H2,H3,velocityBMP,&Brake1,&Brake2,&Brake3);
 
 FreefallDetection(accX,accY,Brake3);// Freefall
  
@@ -175,7 +173,7 @@ void writeData(){
  dataFile.print(",");
  dataFile.print(Ax);
  dataFile.print(",");
- dataFile.println(slopeVelocity);
+ dataFile.println(velocityBMP);
  dataFile.close();
 }
 

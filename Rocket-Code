@@ -26,7 +26,8 @@
 #define g 32.174		// ft/s^2
 
 int pos=0;			// postition of the servo (degrees?)
-int Burnout = 0;	//current status of motor (0 = motor active)
+
+bool burnout = false;	//current status of motor (false = motor active)
 
 //These are not all on the same line to comment them
 double AxPrev = 0;		// previous x acceleration
@@ -40,7 +41,6 @@ double Velocity;		// current velocity
 double OldVelocity = 0;		// saved velocity from previous loop
 double PositionNew;		// integrated velocity since last loop
 double Position = 0;		// current position
-double ALTREFINE;		// no different than alt_refine, delete
 double velocityBMP = 0;		// velocity from BMP, derived from position
 double baseline; 		// baseline pressure
 
@@ -66,11 +66,11 @@ int16_t accX, accY, accZ; 	// unfiltered accelerations, assigns 16 bit signed in
 double altitude;		// yup
 
 void setup() {
-  mpuSetup();			// all aptly named
-  bmpSetup();
-  serialSetup();
-  servoSetup();
-  //SDcardSetup(); 		//set up sd card to read RC data
+  MpuSetup();			// all aptly named
+  BmpSetup();
+  SerialSetup();
+  ServoSetup();
+  SDcardSetup(); 		//set up sd card to read RC data
   SDcardWriteSetup(); 		//setup sd card to write data to
   
 }
@@ -78,40 +78,26 @@ void setup() {
 void loop() { // run code ( main code)
 // and so we begin
 
-	burnout();
-	endGame();   
-	// Launch detection have the getAcc built in 
-	if(launchDetect==0){// this is probably redundant in the function, we could take the function one  //JK 
-		(TimeOfLaunch)=LaunchDetection(&launchDetect);
-	}
-	//is this necessary at all? what is the point of launch detection? this could be deleted when we write the function to recognize 
-	//when the acceleration turns negative, that way we don't have to depend on time to make sure that the brakes don't actuate when the 
-	//motor is on, big no-no from NASA
-
+	Burnout();
+	EndGame();  
 
 T=millis(); // this is needed to distinguish from time in brakingloop
 TimeSinceLaunch=T-TimeOfLaunch;  
 
-/*(tanner)
-PoweredTime=2300; 	//NO
-write a function to recognize when the engine turns off aka when the acceleration turns negative
-*/
-
 BrakingLoop(TimeSinceLaunch,PoweredTime,&BT);		//in the process of being changed
 
 time=millis();  					// current time for measurements
-getAcc(); 						// Updates accX,accY,accZ
-getAlt(); 						// Updates altitude
+GetAcc(); 						// Updates accX,accY,accZ
+GetAlt(); 						// Updates altitude
 
-(Ax)=kalman(accX,    AxPrev,   &PnextAx); 		// calls the kalman filter to refine acceleration in the X direction
-(alt_refine)=kalman(altitude,alt_prev, &PnextALT); 	// refines altitude 
-
+Ax=Kalman(accX,    AxPrev,   &PnextAx); 		// calls the kalman filter to refine acceleration in the X direction
+alt_refine=Kalman(altitude,alt_prev, &PnextALT); 	// refines altitude 
 
 velocityBMP=Derive(OldTime,time,alt_prev,alt_refine); 			// deriving velocity from position from BMP
-VelocityNew=integrate(OldTime,time,AxPrev,Ax);				// integrating acceleration from MPU since last measurement to get velocity
+VelocityNew=Integrate(OldTime,time,AxPrev,Ax);				// integrating acceleration from MPU since last measurement to get velocity
 OldVelocity=Velocity;							// still need the now old velocity to find position at that time 
 Velocity=Velocity+VelocityNew;						// calculates the now new velocity
-PositionNew=integrate(OldTime,time,OldVelocity,Velocity);		// integration to find position from MPU
+PositionNew=Integrate(OldTime,time,OldVelocity,Velocity);		// integration to find position from MPU
 Position=Position+PositionNew;  					// Position is defined as 0 at start 
 
 
@@ -119,13 +105,9 @@ OldTime=time;		// ms, reassigns time for lower bound at next integration cycle (
 AxPrev=Ax;		// reassigns Ax for initial acceleration at next integration cycle  
 alt_prev=alt_refine;  	// reassigns alt_refine for initial altitude at next derivation
 
-ALTREFINE=alt_refine;
+BT=ApogeeCall(alt_refine,H1,H2,H3,velocityBMP,&Brake1,&Brake2,&Brake3); //will be reworked	
 
-if (TimeSinceLaunch>PoweredTime) {
-	BT=ApogeeCall(ALTREFINE,H1,H2,H3,velocityBMP,&Brake1,&Brake2,&Brake3); //will be reworked
-}		
-
-writeData();	// writes all pertinent data
+WriteData();	// writes all pertinent data
 
 }
 //--------------------------------------------------------------Beginning of the Functions---------------------------------------------
@@ -142,7 +124,7 @@ void SDcardWriteSetup(){
 	dataFile.close();	
 }
 
-void writeData(){
+void WriteData(){
  dataFile = SD.open("Data.txt", FILE_WRITE);
  dataFile.print(millis());
  dataFile.print(",");
@@ -161,57 +143,42 @@ void writeData(){
  dataFile.println(derive);
  dataFile.close();
 }
-
-void abortWrite(){
-dataFile = SD.open("Data.txt", FILE_WRITE);
-dataFile.println("ABORT DETECTED");
-dataFile.close();
-}
-
-void launchDetectWrite(){
-dataFile = SD.open("Data.txt", FILE_WRITE);
-dataFile.println("LAUNCH DETECTED");
-dataFile.close();
-}
-
-void freefallWrite(){
-dataFile = SD.open("Data.txt", FILE_WRITE);
-dataFile.println("FREEFALL DETECTED");
-dataFile.close();
-}
-
-void openWrite(){
-dataFile = SD.open("Data.txt", FILE_WRITE);
-dataFile.println("BRAKE OPENED");
-dataFile.close();
-}
-
-void closeWrite(){
-dataFile = SD.open("Data.txt", FILE_WRITE);
-dataFile.println("BRAKE CLOSED");
-dataFile.close();
-}
-
-void btWrite(){
-dataFile = SD.open("Data.txt", FILE_WRITE);
-dataFile.print("BT:");
-dataFile.println(BT);
-dataFile.close();
+void LogWrite(int reason){
+	dataFile = SD.open("Data.txt", FILE_WRITE);
+	switch(reason){
+		case 1: dataFile.println("LAUNCH DETECTED");
+			break;
+		case 2:dataFile.println("ABORT DETECTED");
+			break;
+		case 3:dataFile.println("FREEFALL DETECTED");
+			break;
+		case 4:dataFile.println("BRAKE OPENED");
+			break;
+		case 5: dataFile.println("BRAKE CLOSED");
+			break;
+		case 6: dataFile.print("BT:");
+			dataFile.println(BT);
+			break;
+		case 7: datafile.println("MOTOR BURNOUT");
+			break;
+		default: break;
+	}
+	dataFile.close();
 }
 
 //Serial Setup
-void serialSetup(){
+void SerialSetup(){
  Serial.begin(9600);
 }
 
 //-----------------------------------------------------------Servo Methods--------------------------------------------------------------                                   
 						Adjust this to the current settings?
-void servoSetup(){
+void ServoSetup(){
   servo.attach(9);
   servo.write(0);
 }
 
-void closeServo(){
+void CloseServo(){
 	if (pos>0){
   		do{
 			pos -= 10;
@@ -224,7 +191,7 @@ void closeServo(){
 	
 }
 
-void openServo(){
+void OpenServo(){
 	if (pos<200){
 		do{
 			pos += 10;
@@ -239,12 +206,12 @@ void openServo(){
 }
 //-------------------------------------------------------------------BMP 180 Methods----------------------------------------------------
 
-void bmpSetup(){
+void BmpSetup(){
   bmp.begin();
   baseline = getPressure();
 }
 
-double getPressure(){
+double GetPressure(){
   char status;
   double T,P,p0,a;
 
@@ -297,7 +264,7 @@ double getPressure(){
   else Serial.println("error starting temperature measurement\n");
 }
 
-void getAlt(){
+void GetAlt(){
 double a,P;
   
   // Get a new pressure reading:
@@ -311,12 +278,12 @@ double a,P;
   altitude =a*3.28084; 
   }
 
-void resetBmp(){
+void ResetBmp(){
   baseline = getPressure();
 }
 
 //--------------------------------------------------------------------MPU 6050 Methods--------------------------------------------------
-void getAcc(){
+void GetAcc(){
    mpu.getAcceleration(&accX, &accY, &accZ);
    //what is map?
    accX = map(accX, 0, 4096, 0, 32);
@@ -324,7 +291,7 @@ void getAcc(){
    accZ = map(accZ, 0, 4096, 0, 32);
 }
 
-void mpuSetup(){
+void MpuSetup(){
     //????????? 
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
@@ -338,7 +305,7 @@ void mpuSetup(){
 }
 
 //------------------------------------------------------------IMPORTANT FUNCTIONS-------------------------------------------------------
-double kalman(double UnFV,double FR1,double *Pold){
+double Kalman(double UnFV,double FR1,double *Pold){
 
 /* function filtering results in real time with Kalman filter */
 	int A=1,un=0,H=1,B=0;
@@ -370,101 +337,38 @@ double kalman(double UnFV,double FR1,double *Pold){
 	return FR2;  
 }
 
-double ApogeeCall(double ALTREFINE,int H1, int H2, int H3, double V,int *Brake1, int *Brake2,int *Brake3){//taylor
-	
-	//this will be completely rewritten
-	
-	double BT;
-	int HT;
-	//this code has a prediction built in  to it
-	
-	// we want to make a code that will still deploy air brakes if we accidentally exceed an altitude
-	// without deploying the brakes
-	
-	// ALTREFINE  is the mediated result from the BMP and MPU					-input
-	// H1, H2 ,H3 are altitudes that we want to check what's going on           			-input 
-	// V, Current velocity										-input
-	// BT is the time brakes will be deployed							-output			
-	// ALTREFINE=2001;???
-	// BrakeN is a counter to ensure only one braking cycle per section.				-internal logic
-
-
-if ( (*Brake1==0) && (ALTREFINE >= H1)){
-	// HT is the target height for the iteration
-	HT=3070; // ft
-	BT=ApogeePrediction(ALTREFINE,V,HT);
-	
-	// What if the Prediction is lower than HT?
-	*Brake1=1;
-	//Serial.println("BRAKE1-----------------");
-	brake1Write();
-}
-
-	else if ((ALTREFINE>=H2) && (*Brake2==0)){
-		HT=3025; // ft
-	BT=ApogeePrediction(ALTREFINE,V,HT);
-	// include in this function the turn on key
-	*Brake2=1;
-	brake2Write();
-}
-	else if ((ALTREFINE>=H3) && (*Brake3==0)){
-		HT=3000; // ft
-	BT=ApogeePrediction(ALTREFINE,V,HT);
-
-	// include in this function the turn on 
-	*Brake3=1;
-	brake3Write();
-}
-	else {
-	BT=0;
-	}
-
-return BT;
-}
 
 double ApogeePrediction( double ALTREFINE, double V, double HT) {
-	double NRG1,NRG2,Vout,ACC,FrontArea,D,BT;
-	int MassE,G;
-	
-	//Hn             	// Current Height value				-input
-	//HT			// Height of Target apogee			-input
-	//V			// Velocity in ft/s				-input
-	//MassE			// Mass of rocket Empty				-internal logic
-	//NRG1			// Current Energy of rocket			-internal logic
-	//G 		   	// Value of gravity in ft/s^2			-internal logic
-	//NRG2			// Desired Energy of rocket			-internal logic
-	//Vout			// Velocity we need to be at currently		-internal logic
-	//ACC			// Acceleration due to drag and Gravity		-internal logic
-	//D			// Drag Force					-internal logic
-	//FrontArea		// Frontal area of rocket			-internal logic
-	//BT 			// Braking Time ms				-output
-	//BT			// Braking time(s)				-output
-	
-	// internal logic variable declarations
-	MassE=50; // True mass is 26.5 some   lb //Change this<----------------------------------------------------------------------------------
-	G=32; // ft/s
-	
-	//drag equation
-	FrontArea=.78; //ft^2
-	D=.85*((0.0023769*V*V)/2)*FrontArea;
-	ACC=D/MassE;
-	
-	// double check the drag equation here. cause its just kinda arbitrary
-	NRG1= MassE*G*ALTREFINE;
-	NRG2= MassE*G*HT;
-	Vout= sqrt(((NRG2-NRG1)*2)/MassE);         // might need                   DOUBLE CHECK THE MATH HERE
-	BT=(V-Vout)/(ACC+32);      // this is for drag     // BT should be in seconds
-	BT=BT*1000; // convert to milliseconds
+
+	//all heights are in ft, multiplier has no dimenstions
+	double projHeight;				//The projected final height with no air brakes at this moment in time
+	double desiredFinalHeight;		//The final height that the rocket should reach at this moment in time
+	double multiplier;				//This is multiplied with FINALHEIGHT to equal desiredFinalHeight
+	double k;						//Drag to be used tp calculate extraHeight
+	double extraHeight				//This is added to ALTREFINE to equal projectedHeight
 	
 	
-	if (BT>0){
-	openServo(); // this will open the servo for this iteration if necessary this should be the only way to open the brakes
-	openWrite();
-	}
-   return BT;
+	//Calcualtes projectedHeight
+  k = 0.5 * AREACLOSED * CDCLOSED * 0.0023769; //from old code, check constants
+  extraHeight = (MASS / (2.0 * k)) * log(((MASS * GRAVITY) +(k * velocity * velocity)) / (MASS * GRAVITY));
+  projectedHeight = (ALTREFINE + extraHeight);
+
+  //Calculates desiredFinalHeight
+  multiplier = ((204 - (double) whichBrake) / 200);
+  desiredFinalHeight = FINALHEIGHT * multiplier;
+
+  //If projectedHeight will surpass desiredFinalHeight
+  if (projectedHeight > desiredFinalHeight) // + ERROR)
+  {
+  //  brake = true;
+  }
+  else
+  {
+  //  brake = false;
+  }
 }
 
-double integrate(unsigned long time1, unsigned long time2, double Val1, double Val2) {
+double Integrate(unsigned long time1, unsigned long time2, double Val1, double Val2) {
 
 	//function requires two times, and two  data points
 
@@ -499,9 +403,8 @@ void BrakingLoop(unsigned long TimeSinceLaunch, int PoweredTime, int *BT){     /
 	//BT							// The braking time duration that  (ms)			-input/output with pointer		
 	//TimeStep					// time since Breaking started					-internal logic
 	int TimeStep,TimeStepStart;
-	if (TimeSinceLaunch>PoweredTime){
 		if (*BT>0){
-		btWrite();
+		logWrite(6);
 		TimeStepStart=millis();
 			do{
 				TimeStep=millis()-TimeStepStart;
@@ -509,54 +412,30 @@ void BrakingLoop(unsigned long TimeSinceLaunch, int PoweredTime, int *BT){     /
 				getAlt();
 				writeData();
 					if (TimeStep>=*BT){
-					closeServo(); 		// Closing the brakes state   will call on function  this will be the only closing function
+					closeServo(); 		// Closing the brakes state  will call on function  this will be the only closing function
 					TimeStep=0;  		// Resetting the counter
 					*BT=0    ;			// Reset the Braking time to 0 (this is a back up procedure)
 					}
 			}while(*BT>0);
 		}
-
-	}
-
 }
 
 void FreefallDetection(int accX,int accY,int Brake3){//tanner
 int freefallDetect;
 	if ((accX <= 1 && accX >= -50)&&(Brake3==1)){ 
 		freefallDetect=1;
-		freefallWrite();
-		closeServo();
+		LogWrite(3);
+		CloseServo();
 		do {
-			getAcc();
-			getAlt();
+			GetAcc();
+			GetAlt();
 			delay(200);
-			writeData();
+			WriteData();
 		}
 		while(freefallDetect==1);
 	}
 }
 
-unsigned long LaunchDetection(int *launchDetect){
- 
- //TimeOfLaunch 			//The time on global clock when launch is detected		-output
- //launchDetect				// conditional for operating 
- 
- unsigned long TimeOfLaunch;
-	if (*launchDetect==0){
-		do{
-			getAcc();
-			if (accX>=45){// figure out the acceleration right after launch----------------------------------------------------------
-				//why accX? wouldn't we want accY?
-				*launchDetect=1;
-				TimeOfLaunch=millis();
-				launchDetectWrite();
-			}
-		}
-		while(*launchDetect==0);
-		return TimeOfLaunch;
-	} 
-}
-		
 	
 double Derive(unsigned long OldTime, unsigned long time, double alt_prev, double alt_refine){
 	double Slope,OldTimeDouble,timeDouble;
@@ -566,22 +445,24 @@ double Derive(unsigned long OldTime, unsigned long time, double alt_prev, double
 	return Slope;
 }
 
-void burnout(){
+void Burnout(){
 
 	/* Detects when the vertical acceleration is negative. Holds arduino hostage until it's satisfied*/
 	
 	//accX		//vertical acceleration				//input
-	//Burnout	//0 when motor is on, 1 afterwards	//output
+	//Burnout	//false when motor is on, true afterwards	//output
 	
-	while(Burnout == 0){
-		getAcc();				//updates acceleration values
-		if(accX <= -(g+2.0))	//checks if vertical acceleration is <= ~ -30
-			Burnout = 1;
+	while(Burnout == false){
+		GetAcc();	
+		Ax=Kalman(accX,AxPrev,&PnextAx);
+		AxPrev=Ax; 		
+		if(Ax <= -(g+2.0))	//checks if vertical acceleration is <= ~ -30
+			burnout = true;
 	}
-	
+	LogWrite(7);
 }
 
-void endGame(){
+void EndGame(){
 	
 	/* Checks if apogee has been reached or if the rocket is on a poor trajectory. 
 	If so, the brakes will permanently close and data will be logged until end of flight*/
@@ -589,25 +470,25 @@ void endGame(){
 	//slopeVelocity		//current velocity of rocket from BMP altitude.		//input
 	//Burnout			//int indicator of motor burnout					//input
 	
-	if((slopeVelocity < 0 && Burnout == 1) || ( abs(accY)>=32  || abs(accZ)>=32)){
+	if((slopeVelocity < 0 && burnout == true) || ( abs(accY)>=32  || abs(accZ)>=32)){
 		if(slopeVelocity < 0){	
-			freefallWrite();		//checks what to write to log file
+			LogWrite(3);		//checks what to write to log file
 		}else{
-			abortWrite();
+			LogWrite(2);
 		}
 		
-		closeServo();				//close brakes
+		CloseServo();				//close brakes
 		
-		while(true){ 				//brakes closed, flight data will be logged until compputer is turned off
+		while(true){ 				//brakes closed, flight data will be logged until computer is turned off
 			time = millis();
-			getAcc();
-			getAlt();
-			alt_refine=kalman(altitude,alt_prev, &PnextALT); 
+			GetAcc();
+			GetAlt();
+			alt_refine=Kalman(altitude,alt_prev, &PnextALT); 
 			slopeVelocity = SlopeVelocity(OldTime,time,alt_prev,alt_refine);
 			OldTime=time;
 			alt_prev=alt_refine;
 			delay(100);
-			writeData();
+			WriteData();
 		}
 	} 
 }

@@ -15,15 +15,19 @@
 // 	ex: HelloWorld()
 
 #include "I2Cdev.h"		// provides simple and intuitive interfaces to I2C devices
-#include "MPU6050.h"		// IMU library
+#include "MPU6050.h"	// IMU library
 #include "Wire.h"		// allows you to communicate with I2C / TWI devices
-#include <SFE_BMP180.h>		// pressure/temp sensor library
+#include <SFE_BMP180.h>	// pressure/temp sensor library
 #include <Servo.h>		// servo library
 #include <SPI.h>		// Serial Peripheral Interface(SPI) used for communicating with one or more peripheral devices quickly over short distances
 #include <SD.h>			// microSD card library
 
 #define R 1716  		// (ft*lb)/(slug*degree_R) 
 #define g 32.174		// ft/s^2
+#define CDCLOSED 0.675	//The coefficient of drag when the air brakes are closed <-- VERIFY
+#define AREACLOSED 3.4	//The area of the rocket when the air brakes are closed <--VERIFY
+#define FINALHEIGHT 5280.0  //Final height we want rocket to reach at apogee, in ft
+#define MASS 32.6		//Mass of the rocket in lb, SUBJECT TO FREQUENT CHANGE <-------
 
 int pos=0;			// postition of the servo (degrees?)
 
@@ -90,15 +94,15 @@ time=millis();  					// current time for measurements
 GetAcc(); 						// Updates accX,accY,accZ
 GetAlt(); 						// Updates altitude
 
-Ax=Kalman(accX,    AxPrev,   &PnextAx); 		// calls the kalman filter to refine acceleration in the X direction
+Ax=Kalman(accX,AxPrev,&PnextAx); 		// calls the kalman filter to refine acceleration in the X direction
 alt_refine=Kalman(altitude,alt_prev, &PnextALT); 	// refines altitude 
 
 velocityBMP=Derive(OldTime,time,alt_prev,alt_refine); 			// deriving velocity from position from BMP
 VelocityNew=Integrate(OldTime,time,AxPrev,Ax);				// integrating acceleration from MPU since last measurement to get velocity
 OldVelocity=Velocity;							// still need the now old velocity to find position at that time 
-Velocity=Velocity+VelocityNew;						// calculates the now new velocity
+Velocity+=VelocityNew;						// calculates the now new velocity
 PositionNew=Integrate(OldTime,time,OldVelocity,Velocity);		// integration to find position from MPU
-Position=Position+PositionNew;  					// Position is defined as 0 at start 
+Position+=PositionNew;  					// Position is defined as 0 at start 
 
 
 OldTime=time;		// ms, reassigns time for lower bound at next integration cycle (move this to top of loop to eliminate any time delays between time and oldTime to have a better integration and derivation?)
@@ -140,7 +144,7 @@ void WriteData(){
  dataFile.print(",");
  dataFile.print(Ax);
  dataFile.print(",");
- dataFile.println(derive);
+ dataFile.println(VelocityBMP);
  dataFile.close();
 }
 void LogWrite(int reason){
@@ -292,7 +296,7 @@ void GetAcc(){
 }
 
 void MpuSetup(){
-    //????????? 
+    //joins I2C bus (I2Cdev library doesn't do this automatically) (Was found in available rocket code on internet) 
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
     #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
@@ -338,7 +342,7 @@ double Kalman(double UnFV,double FR1,double *Pold){
 }
 
 
-double ApogeePrediction( double ALTREFINE, double V, double HT) {
+double ApogeePrediction( double ALTREFINE, double V) {
 
 	//all heights are in ft, multiplier has no dimenstions
 	double projHeight;				//The projected final height with no air brakes at this moment in time
@@ -350,11 +354,11 @@ double ApogeePrediction( double ALTREFINE, double V, double HT) {
 	
 	//Calcualtes projectedHeight
   k = 0.5 * AREACLOSED * CDCLOSED * 0.0023769; //from old code, check constants
-  extraHeight = (MASS / (2.0 * k)) * log(((MASS * GRAVITY) +(k * velocity * velocity)) / (MASS * GRAVITY));
+  extraHeight = (MASS / (2.0 * k)) * log(((MASS * g) +(k * velocity * velocity)) / (MASS * g));
   projectedHeight = (ALTREFINE + extraHeight);
 
   //Calculates desiredFinalHeight
-  multiplier = ((204 - (double) whichBrake) / 200);
+  multiplier = ((204 - (double) whichBrake) / 200); //figure out whichBrake
   desiredFinalHeight = FINALHEIGHT * multiplier;
 
   //If projectedHeight will surpass desiredFinalHeight
@@ -370,7 +374,7 @@ double ApogeePrediction( double ALTREFINE, double V, double HT) {
 
 double Integrate(unsigned long time1, unsigned long time2, double Val1, double Val2) {
 
-	//function requires two times, and two  data points
+	/*function requires two times, and two data points	*/
 
 	double Time2, Time1;
 	Time2=time2/1000;
@@ -379,14 +383,14 @@ double Integrate(unsigned long time1, unsigned long time2, double Val1, double V
 	//Area				//result of integration  		-output
 	//Val1				//input of initial value		-input
 	//Val2				//input of secondary inital 	-input
-	//deltaT				//change in time				-internal logic
-	//deltaA				//change in value				-internal logic
-	//time2				//time previous				-input
-	//time1				//time current				-input
+	//deltaT			//change in time				-internal logic
+	//deltaA			//change in value				-internal logic
+	//time2				//Previous time					-input
+	//time1				//time current					-input
 
 
-	double deltaT, deltaA;     // declares Change in time, Change in Acceleration
-	double Area; 		   // declares Final Area
+	double deltaT, deltaA, Area;
+	
 	deltaT = Time2-Time1;      // computes deltaT
 	deltaA = (Val2+Val1)/2;    // computes deltaA
 	Area = deltaT*deltaA; 	   // computes Area
@@ -419,28 +423,10 @@ void BrakingLoop(unsigned long TimeSinceLaunch, int PoweredTime, int *BT){     /
 			}while(*BT>0);
 		}
 }
-
-void FreefallDetection(int accX,int accY,int Brake3){//tanner
-int freefallDetect;
-	if ((accX <= 1 && accX >= -50)&&(Brake3==1)){ 
-		freefallDetect=1;
-		LogWrite(3);
-		CloseServo();
-		do {
-			GetAcc();
-			GetAlt();
-			delay(200);
-			WriteData();
-		}
-		while(freefallDetect==1);
-	}
-}
-
 	
 double Derive(unsigned long OldTime, unsigned long time, double alt_prev, double alt_refine){
-	double Slope,OldTimeDouble,timeDouble;
-	OldTimeDouble=OldTime;
-	timeDouble=time;
+	double Slope,OldTimeDouble = OldTime,timeDouble = time;
+	
 	Slope=((alt_refine-alt_prev)/((timeDouble/1000)-(OldTimeDouble/1000)));
 	return Slope;
 }
@@ -449,8 +435,8 @@ void Burnout(){
 
 	/* Detects when the vertical acceleration is negative. Holds arduino hostage until it's satisfied*/
 	
-	//accX		//vertical acceleration				//input
-	//Burnout	//false when motor is on, true afterwards	//output
+	//Ax		//Filtered vertical acceleration			//input
+	//Burnout	//False when motor is on, true afterwards	//output
 	
 	while(Burnout == false){
 		GetAcc();	
@@ -467,11 +453,11 @@ void EndGame(){
 	/* Checks if apogee has been reached or if the rocket is on a poor trajectory. 
 	If so, the brakes will permanently close and data will be logged until end of flight*/
 	
-	//slopeVelocity		//current velocity of rocket from BMP altitude.		//input
+	//VelocityBMP		//current velocity of rocket from BMP altitude.		//input
 	//Burnout			//int indicator of motor burnout					//input
 	
-	if((slopeVelocity < 0 && burnout == true) || ( abs(accY)>=32  || abs(accZ)>=32)){
-		if(slopeVelocity < 0){	
+	if((velocityBMP < 0 && burnout == true) || ( abs(accY)>=32  || abs(accZ)>=32)){
+		if(velocityBMP < 0){	
 			LogWrite(3);		//checks what to write to log file
 		}else{
 			LogWrite(2);
@@ -484,7 +470,7 @@ void EndGame(){
 			GetAcc();
 			GetAlt();
 			alt_refine=Kalman(altitude,alt_prev, &PnextALT); 
-			slopeVelocity = SlopeVelocity(OldTime,time,alt_prev,alt_refine);
+			VelocityBMP = Derive(OldTime,time,alt_prev,alt_refine);
 			OldTime=time;
 			alt_prev=alt_refine;
 			delay(100);
@@ -492,5 +478,3 @@ void EndGame(){
 		}
 	} 
 }
-
-

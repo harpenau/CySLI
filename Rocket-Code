@@ -1,6 +1,6 @@
 // formatting rules:
 // 1) { on same line as statement
-// 	ex: if (condition) {
+// 	ex: if (condition) 
 // 2) multicomment lines go above line
 // 	ex: // comment
 //	    // comment continued

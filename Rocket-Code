@@ -104,11 +104,7 @@ BrakingLoop(TimeSinceLaunch,PoweredTime,&BT);
 time=millis();  // current time for measurements
 getAcc(); 		// Updates accX,accY,accZ
 getAlt(); 		// Updates altitude
-
-(Ax)=kalman(accX,    Xprev,   &PnextAx); 
-
-(alt_refine)=kalman(altitude,alt_prev, &PnextALT); 
-
+ 
 //2 forms of getting velocity
 velocityBMP=SlopeVelocity(OldTime,time,alt_prev,alt_refine);//deriving velocity from position
 
@@ -120,6 +116,10 @@ Velocity=Velocity+VelocityNew;
 
 PositionNew=integrate(OldTime,time,OldVelocity,Velocity);// integration to find position
 Position=Position+PositionNew;  // Position is defined as 0 at start 
+
+(Ax)=kalman(accX,    Xprev,   &PnextAx); 
+
+(alt_refine)=kalman(altitude,alt_prev, &PnextALT);
 
 // reassign the acceleration values to oldACCx,oldACCz,oldACCy, time too
 OldaccX=accX ;			//OldaccX assigned 0 at start
@@ -137,12 +137,12 @@ if (TimeSinceLaunch>PoweredTime){
 BT=ApogeeCall(ALTREFINE,H1,H2,H3,velocityBMP,&Brake1,&Brake2,&Brake3);
 
 FreefallDetection(accX,accY,Brake3);// Freefall
- 
+}
 Abort(launchDetect);//Abortion
 
 writeData();
 
-}
+
 //--------------------------------------------------------------Beginning of the Functions---------------------------------------------
  
 //--------------------------------------------------------------SD Card Functions------------------------------------------------------

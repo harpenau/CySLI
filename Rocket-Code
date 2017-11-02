@@ -70,9 +70,6 @@ void loop() { // run code (main code)
 GetAcc(); 			// Updates accX,accY,accZ
 GetAlt(); 			// Updates altitude
 
-T=millis(); // this is needed to distinguish from time in brakingloop
-TimeSinceLaunch=T-TimeOfLaunch;  
-
 OldTime=time;		// ms, reassigns time for lower bound at next integration cycle (move this to top of loop to eliminate any time delays between time and oldTime to have a better integration and derivation?)
 AxPrev=Ax;		// reassigns Ax for initial acceleration at next integration cycle  
 altPrev=altRefine;  	// reassigns altRefine for initial altitude at next derivation
@@ -85,23 +82,17 @@ velocityBMP=Derive(OldTime,time,altPrev,altRefine); 		// deriving velocity from 
 OldVelocity=Velocity;					// still need the now old velocity to find position at that time 
 Velocity+=VelocityNew;					// calculates the now new velocity
 Position+=PositionNew;  				// Position is defined as 0 at start 
- 
-BrakingLoop(TimeSinceLaunch,PoweredTime,&BT);		//in the process of being changed
-
-time=millis();  					// current time for measurements
 
 Ax=Kalman(accX,AxPrev,&PnextAx); 			// calls the kalman filter to refine acceleration in the X direction
 altRefine=Kalman(altitude,altPrev, &PnextALT); 		// refines altitude 
-
 
 BT=ApogeeCall(altRefine,H1,H2,H3,velocityBMP,&Brake1,&Brake2,&Brake3); //will be reworked	
 
 	EndGame(); 
 
-}
-
 WriteData();	// writes all pertinent data
 
+}
 
 //--------------------------------------------------------------Beginning of the Functions---------------------------------------------
  

@@ -41,15 +41,18 @@ double PnextALT = 0; 		// prediction of next altitude for kalman filter, used ex
 double altPrev = 0; 		// saved altitude from previous loop
 double altRefine;		// smoothed altitude
 double Ax;			// smoothed x acceleration
-double VelocityNew;		// added or subtracted velocity since last loop
-double Velocity;		// current velocity
-double OldVelocity = 0;		// saved velocity from previous loop
+double velocityNew;		// added or subtracted velocity since last loop
+double velocity = 0;		// current velocity
+double oldVelocity = 0;		// saved velocity from previous loop
 double positionNew;		// integrated velocity since last loop
 double position = 0;		// current position
 double velocityBMP = 0;		// velocity from BMP, derived from position
+double accelerationBMP = 0;
 double baseline; 		// baseline pressure
-
-unsigned long T=0;		
+double avPosition;
+double avVelocity;
+double avAcceleration;
+	
 unsigned long time=0;   	// current time(stationary once called?), used for integration and derivation
 unsigned long OldTime=0;	// time at end of loop (stationary once called?)
 
@@ -78,33 +81,17 @@ void setup(){
   Burnout();
 }
 
-void loop() { // run code (main code)
-// and so we begin
+void loop() { // run code (main code) 
 
-EndGame();  
+UpdateData();
 
-time=millis();  					// current time for measurements
-GetAcc(); 						// Updates accX,accY,accZ
-GetAlt(); 						// Updates altitude
-
-Ax=Kalman(accX,AxPrev,&PnextAx); 		// calls the kalman filter to refine acceleration in the X direction
-altRefine=Kalman(altitude,altPrev, &PnextALT); 	// refines altitude 
-
-velocityBMP=Derive(OldTime,time,altPrev,altRefine); 			// deriving velocity from position from BMP
-VelocityNew=Integrate(OldTime,time,AxPrev,Ax);				// integrating acceleration from MPU since last measurement to get velocity
-OldVelocity=Velocity;							// still need the now old velocity to find position at that time 
-Velocity+=VelocityNew;						// calculates the now new velocity
-positionNew=Integrate(OldTime,time,OldVelocity,Velocity);		// integration to find position from MPU
-position+=positionNew;  					// Position is defined as 0 at start 
-
-OldTime=time;		// ms, reassigns time for lower bound at next integration cycle (move this to top of loop to eliminate any time delays between time and oldTime to have a better integration and derivation?)
-AxPrev=Ax;		// reassigns Ax for initial acceleration at next integration cycle  
-altPrev=altRefine;  	// reassigns altRefine for initial altitude at next derivation
+EndGame();
 
 if(burnout){
 	ApogeePrediction();
 }
 
+WriteData();
 }
 //--------------------------------------------------------------Beginning of the Functions---------------------------------------------
  
@@ -347,7 +334,7 @@ double ApogeePrediction(){
 
 	//Calcualtes projectedHeight
   k = 0.5 * AREACLOSED * CDCLOSED * 0.0023769; //from old code, check constants
-  extraHeight = (MASS / (2.0 * k)) * log(((MASS * g) +(k * Velocity * Velocity)) / (MASS * g));
+  extraHeight = (MASS / (2.0 * k)) * log(((MASS * g) +(k * velocity * velocity)) / (MASS * g));
   projHeight = (altRefine + extraHeight);
 
   //Calculates desiredFinalHeight
@@ -405,11 +392,9 @@ void Burnout(){
 	//Ax		//Filtered vertical acceleration			//input
 	//Burnout	//False when motor is on, true afterwards	//output
 	
-	while(Burnout == false){
-		GetAcc();
-		Ax=Kalman(accX,AxPrev,&PnextAx);
-		AxPrev=Ax; 		
-		if(Ax <= -(g+2.0))	//checks if vertical acceleration is <= ~ -30
+	while(!burnout){
+		UpdateData(); 		
+		if(Ax <= -(g+1.0))	//checks if vertical acceleration is <= ~ -30
 			burnout = true;
 	}
 	LogWrite(7);
@@ -419,7 +404,7 @@ void EndGame(){
 	
 	/* Checks if apogee has been reached or if the rocket is on a poor trajectory. 
 	If so, the brakes will permanently close and data will be logged until end of flight*/
-	
+
 	
 	if((velocityBMP < 0 && burnout == true) || ( abs(accY)>=32  || abs(accZ)>=32)){
 		if(velocityBMP < 0){	
@@ -432,14 +417,38 @@ void EndGame(){
 		ServoFunction(); //closes brakes since we set brake to false
 		
 		while(true){ 				//brakes closed, flight data will be logged until computer is turned off
-			time = millis();
-			GetAcc();
-			GetAlt();
-			altRefine=Kalman(altitude,altPrev, &PnextALT); 
-			velocityBMP = Derive(OldTime,time,altPrev,altRefine);
-			OldTime=time;
-			altPrev=altRefine;
+			UpdateData();
 			WriteData();
 		}
 	} 
+}
+
+void UpdateData(){
+	
+	/* Updates all global variables for calculations */
+	
+	time = millis();
+	GetAcc();
+	GetAlt();
+	
+	velocityNew = Integrate(OldTime, time, AxPrev, Ax);
+	positionNew = Integrate(OldTime, time, oldVelocity, velocity);	// integrating acceleration from MPU since last measurement to get velocity
+	velocityBMP = Derive(OldTime, time, altPrev, altitude);		// deriving velocity from position from BMP
+	accelerationBMP = Derive(OldTime, time, oldVelocity, velocityBMP);
+	positionNew=Integrate(OldTime,time,oldVelocity,velocity);		// integration to find position from MPU
+	velocity+=velocityNew;						// calculates the now new velocity
+	position+=positionNew;  					// Position is defined as 0 at start 
+	
+	avAcceleration = (accelerationBMP + accX) / 2.0;
+	avPosition = (position + altitude) / 2.0;
+	avVelocity = (velocity + velocityBMP) / 2.0;
+	
+	Ax = Kalman(avAcceleration, AxPrev, &PnextAx);
+	altRefine = Kalman(avPosition, altPrev, &PnextALT);
+	
+	OldTime=time;		// ms, reassigns time for lower bound at next integration cycle (move this to top of loop to eliminate any time delays between time and oldTime to have a better integration and derivation?)
+	AxPrev=Ax;		// reassigns Ax for initial acceleration at next integration cycle  
+	oldVelocity = velocity;	// still need the now old velocity to find position at that time 
+	altPrev=altRefine;  	// reassigns altRefine for initial altitude at next derivation
+
 }

@@ -1,3 +1,5 @@
+#include <Servo.h>
+
 #include <Wire.h>
 #include <MS5611.h>
 #include <servo.h> 

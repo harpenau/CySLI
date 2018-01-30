@@ -98,9 +98,10 @@ if(burnout){
   ApogeePrediction();
 }
 
-
 EndGame();
+
 GPSloop();
+
 WriteData();
 }
 //--------------------------------------------------------------Beginning of the Functions---------------------------------------------

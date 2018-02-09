@@ -31,9 +31,9 @@
 #define CDCLOSED 0.675  //The coefficient of drag when the air brakes are closed <-- VERIFY
 #define AREACLOSED 3.4  //The area of the rocket when the air brakes are closed <--VERIFY
 #define FINALHEIGHT 5280.0  //Final height we want rocket to reach at apogee, in ft
-#define MASS 32.6   //Mass of the rocket in lb, SUBJECT TO FREQUENT CHANGE <---------------------
+#define MASS 42.6   //Mass of the rocket in lb, SUBJECT TO FREQUENT CHANGE <---------------------
 
-int pos=0;      // postition of the servo (degrees?)
+int pos=35;      // postition of the servo (degrees?)
 
 bool burnout = false; //current status of motor (false = motor active)
 bool brake = false; //status of the brakes (false = closed, true = open)
@@ -45,11 +45,9 @@ double PnextALT = 0;    // prediction of next altitude for kalman filter, used e
 double altPrev = 0;     // saved altitude from previous loop
 double altRefine;   // smoothed altitude
 double Ax;      // smoothed x acceleration
-double velocityNew;   // added or subtracted velocity since last loop
 double velocity = 0;    // current velocity
 double oldVelocity = 0;   // saved velocity from previous loop
-double positionNew;   // integrated velocity since last loop
-double position = 0;    // current position
+//double position = 0;    // current position
 double velocityms5611 = 0;   // velocity from ms5611, derived from position
 double accelerationms5611 = 0;
 double baseline;    // baseline pressure
@@ -86,8 +84,8 @@ void setup(){
   ServoSetup();
   SDcardSetup();
   SDcardWriteSetup();     //setup sd card to write data to
-  Burnout();
   GpsSetup();
+  Burnout();
 }
 
 void loop() { // run code (main code) 
@@ -175,7 +173,7 @@ void SDcardSetup(){
 
 void SDcardWriteSetup(){
   dataFile = SD.open("Data.txt", FILE_WRITE);
-  dataFile.println("Time(ms),Height(ft),F Alt(ft),AccX(ft/s^2),AccY(ft/s^2),AccZ(ft/s^2),F Acc(ft/s^2),SlopeVel(ft/s)");
+  dataFile.println("Time(ms),Height(ft),F Alt(ft),AccX(ft/s^2),AccY(ft/s^2),AccZ(ft/s^2),Brake Status, F Acc(ft/s^2),SlopeVel(ft/s)");
   dataFile.close(); 
 }
 
@@ -201,7 +199,7 @@ void WriteData(){
  dataFile.close();
 }
 
-void LogWrite(int reason){
+void LogWrite(short reason){
   
   /*Called to write important checkpoints during flight*/
   
@@ -219,7 +217,7 @@ void LogWrite(int reason){
       break;
     case 5: dataFile.println("BRAKE CLOSED");
       break;
-    case 6:
+    case 6: dataFile.println("TARGET APOGEE REACHED, VELOCITY > 0, BRAKING UNTIL FREEFALL");
       break;
     case 7: dataFile.println("MOTOR BURNOUT");
       break;
@@ -245,18 +243,16 @@ void ServoFunction(){
     we want brakes to open. If false, brakes will closed. */
     
   if(brake){
-    LogWrite(4);
-    for(; pos >= 200; pos += 10){
+	if(pos < 125){
+      LogWrite(4);
+      pos = pos + 10;
       servo.write(pos);
-      delay(10);
     }
-  } else{
-    LogWrite(5);
-    for(; pos <= 0; pos -= 10){
+  } else if (pos > 35){
+      LogWrite(5);
+      pos = pos - 10;
       servo.write(pos);
-      delay(10);
     }
-  }
   
 }
 //-------------------------------------------------------------------ms5611 180 Methods----------------------------------------------------
@@ -295,8 +291,6 @@ void GetAcc(){
    accX = map(accX, 0, 4096, 0, 32);
 //   Serial.print(accX);
    accY = map(accY, 0, 4096, 0, 32);
-//   Serial.print("  ");
-//   Serial.println(accY);
    accZ = 0-map(accZ, 0, 4096, 0, 32);
 }
 
@@ -350,23 +344,21 @@ double ApogeePrediction(){
 
   //all heights are in ft, multiplier has no dimenstions
   double projHeight;        //The projected final height with no air brakes at this moment in time
-  double desiredFinalHeight;    //The final height that the rocket should reach at this moment in time
-  double multiplier;        //This is multiplied with FINALHEIGHT to equal desiredFinalHeight
+  //double desiredFinalHeight;    //The final height that the rocket should reach at this moment in time
+  //double multiplier;        //This is multiplied with FINALHEIGHT to equal desiredFinalHeight
   double k;           //Drag to be used tp calculate extraHeight
-  double extraHeight;       //This is added to ALTREFINE to equal projectedHeight
+  //double extraHeight;       //This is added to ALTREFINE to equal projectedHeight
 
 
   //Calcualtes projectedHeight
-  k = 0.5 * AREACLOSED * CDCLOSED * 0.0023769; //from old code, check constants
-  extraHeight = (MASS / (2.0 * k)) * log(((MASS * g) +(k * velocity * velocity)) / (MASS * g));
-  projHeight = (altRefine + extraHeight);
+  k = 0.5 * AREACLOSED * CDCLOSED * 0.07262; //from old code, check constants
+  projHeight = (MASS / (2.0 * k)) * log(((MASS * g) +(k * velocity * velocity)) / (MASS * g)) + altRefine;
 
   //Calculates desiredFinalHeight
   //multiplier = ((204 - (double) whichBrake) / 200); //figure out whichBrake
-  desiredFinalHeight = FINALHEIGHT * multiplier;
 
   //If projectedHeight will surpass desiredFinalHeight
-  if (projHeight > desiredFinalHeight) // + ERROR)
+  if (projHeight > FINALHEIGHT) // + ERROR)
   {
     brake = true;
   }
@@ -378,35 +370,28 @@ double ApogeePrediction(){
   ServoFunction();
 }
 
-double Integrate(unsigned long time1, unsigned long time2, double Val1, double Val2) {
+double Integrate(unsigned long prevTime, unsigned long currTime, double Val1, double Val2) {
 
   /*function requires two times, and two data points*/
 
-  double Time2 = time2/1000, Time1 = time1/1000;
-
-  //Area        //result of integration     -output
   //Val1        //input of initial value    -input
   //Val2        //input of secondary inital   -input
   //deltaT      //change in time        -internal logic
   //deltaA      //change in value       -internal logic
-  //time2       //Previous time         -input
-  //time1       //time current          -input
+  //prevTime       //Previous time         -input
+  //currTime       //time current          -input
 
-  double deltaT, deltaA, Area;
+  double deltaT, deltaA;
   
-  deltaT = Time2-Time1;      // computes deltaT
+  deltaT = (currTime-prevTime)/1000;      // computes deltaT
   deltaA = (Val2+Val1)/2;    // computes deltaA
-  Area = deltaT*deltaA;      // computes Area
   
-  return Area; 
+  return deltaT*deltaA; //computes and returns Area, the result of the integration
 } 
   
 double Derive(unsigned long OldTime, unsigned long time, double altPrev, double altRefine){
   
-  double Slope;
-  
-  Slope=(altRefine-altPrev)/(((double) time/1000)-((double) OldTime/1000));
-  return Slope;
+  return (altRefine-altPrev)/((double) time -(double) OldTime / 1000);
 }
 
 void Burnout(){
@@ -449,7 +434,13 @@ void EndGame(){
       WriteData();
       GPSloop();
     }
-  } 
+  } else if(altitude > FINALHEIGHT && avVelocity > 0){
+		LogWrite(6);
+		brake = true;
+		while(avVelocity > 0){
+			ServoFunction();
+		}
+  }  
 }
 
 void UpdateData(){
@@ -458,19 +449,12 @@ void UpdateData(){
   
   time = millis();
   GetAcc();
-//  Serial.println(accZ);
-  //Serial.print(avAcceleration);
-  //Serial.print("    ");
   GetAlt();
-  //Serial.println(altitude);
-  Serial.println(altRefine);
-  velocityNew = Integrate(OldTime, time, AxPrev, Ax);
-  positionNew = Integrate(OldTime, time, oldVelocity, velocity);  // integrating acceleration from MPU since last measurement to get velocity
+  
   velocityms5611 = Derive(OldTime, time, altPrev, altitude);   // deriving velocity from position from ms5611
   accelerationms5611 = Derive(OldTime, time, oldVelocity, velocityms5611);
-  positionNew=Integrate(OldTime,time,oldVelocity,velocity);   // integration to find position from MPU
-  velocity+=velocityNew;            // calculates the now new velocity
-  position+=positionNew;            // Position is defined as 0 at start 
+  velocity += Integrate(OldTime, time, AxPrev, Ax); //Integrating to get new velocity
+ // position+= Integrate(OldTime, time, oldVelocity, velocity);    
   
   avAcceleration = (accelerationms5611 + accX) / 2.0;
   avPosition = (position + altitude) / 2.0;
@@ -478,6 +462,12 @@ void UpdateData(){
   
   Ax = Kalman(avAcceleration, AxPrev, &PnextAx);
   altRefine = Kalman(avPosition, altPrev, &PnextALT);
+  
+   Serial.print("Altrefine:"); Serial.print(altRefine); Serial.print("  Raw alt: "); Serial.print(altitude);
+  Serial.print("   Ax:"); Serial.print(Ax, 4); 
+  Serial.print("  MSvelocity:"); Serial.print(velocityms5611);
+  Serial.print("   velocity:"); Serial.print(velocity, 4);
+  Serial.print(" AvVelocity: "); Serial.println(avVelocity);
   
   OldTime=time;   // ms, reassigns time for lower bound at next integration cycle (move this to top of loop to eliminate any time delays between time and oldTime to have a better integration and derivation?)
   AxPrev=avAcceleration;    // reassigns Ax for initial acceleration at next integration cycle  

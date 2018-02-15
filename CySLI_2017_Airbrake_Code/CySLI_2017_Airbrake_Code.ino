@@ -16,8 +16,7 @@
 
 #include <I2Cdev.h>   // provides simple and intuitive interfaces to I2C devices
 #include <MPU6050.h>  // IMU library
-#include <Wire.h>   // allows you to communicate with I2C / TWI devices
-//#include <SFE_ms5611180.h> // pressure/temp sensor library
+//#include <Wire.h>   // allows you to communicate with I2C / TWI devices
 #include <Servo.h>    // servo library
 #include <SPI.h>    // Serial Peripheral Interface(SPI) used for communicating with one or more peripheral devices quickly over short distances
 #include <SD.h>     // microSD card library
@@ -26,14 +25,14 @@
 #include <GPSport.h>
 #include <Streamers.h>
 
-#define Ridk 1716     // (ft*lb)/(slug*degree_R)  //DIFFERENT NAME??????????????DELETE?????????-------------------------------
+//#define Ridk 1716     // (ft*lb)/(slug*degree_R)  //DIFFERENT NAME??????????????DELETE?????????-------------------------------
 #define g 32.174    // ft/s^2
 #define CDCLOSED 0.675  //The coefficient of drag when the air brakes are closed <-- VERIFY
-#define AREACLOSED 3.4  //The area of the rocket when the air brakes are closed <--VERIFY
+#define AREACLOSED 0.19634  //The area of the rocket when the air brakes are closed
 #define FINALHEIGHT 5280.0  //Final height we want rocket to reach at apogee, in ft
-#define MASS 42.6   //Mass of the rocket in lb, SUBJECT TO FREQUENT CHANGE <---------------------
+#define MASS 42.6   //Mass of the rocket in lb (without fuel), SUBJECT TO FREQUENT CHANGE <---------------------
 
-int pos=35;      // postition of the servo (degrees?)
+short pos=35;      // postition of the servo (degrees?)
 
 bool burnout = false; //current status of motor (false = motor active)
 bool brake = false; //status of the brakes (false = closed, true = open)
@@ -45,15 +44,12 @@ double PnextALT = 0;    // prediction of next altitude for kalman filter, used e
 double altPrev = 0;     // saved altitude from previous loop
 double altRefine;   // smoothed altitude
 double Ax;      // smoothed x acceleration
-double velocity = 0;    // current velocity
-double oldVelocity = 0;   // saved velocity from previous loop
-//double position = 0;    // current position
-double velocityms5611 = 0;   // velocity from ms5611, derived from position
-double accelerationms5611 = 0;
+float velocity = 0;    // current velocity
+float oldVelocity = 0;   // saved velocity from previous loop
+//float position = 0;    // current position
+float velocityms5611 = 0;   // velocity from ms5611, derived from position
 double baseline;    // baseline pressure
-double avPosition;
-double avVelocity;
-double avAcceleration;
+float avVelocity;
   
 unsigned long time=0;     // current time(stationary once called?), used for integration and derivation
 unsigned long OldTime=0;  // time at end of loop (stationary once called?)
@@ -64,12 +60,9 @@ static gps_fix  fix;
 //Objects
 MS5611 ms5611;
 
-//SFE_ms5611180 ms5611;
 MPU6050 mpu;
 Servo servo;
 File dataFile;      // the datafile variable to save stuff to microSD
-
-
 
 //MPU 6050 Accelerations
 int16_t accX, accY, accZ;   // unfiltered accelerations, assigns 16 bit signed integers, used for balence of precision and speed
@@ -78,9 +71,9 @@ int16_t accX, accY, accZ;   // unfiltered accelerations, assigns 16 bit signed i
 double altitude;  
 
 void setup(){
+  SerialSetup();
   MpuSetup();     
   ms5611Setup();
-  SerialSetup();
   ServoSetup();
   SDcardSetup();
   SDcardWriteSetup();     //setup sd card to write data to
@@ -173,13 +166,17 @@ void SDcardSetup(){
 
 void SDcardWriteSetup(){
   dataFile = SD.open("Data.txt", FILE_WRITE);
-  dataFile.println("Time(ms),Height(ft),F Alt(ft),AccX(ft/s^2),AccY(ft/s^2),AccZ(ft/s^2),Brake Status, F Acc(ft/s^2),SlopeVel(ft/s)");
+  if(dataFile)
+      Serial.println(F("file successfullly opened"));
+  dataFile.println(F("Time(ms),Height(ft),F Alt(ft),AccX(ft/s^2),AccY(ft/s^2),AccZ(ft/s^2),Brake Status, F Acc(ft/s^2),SlopeVel(ft/s)"));
   dataFile.close(); 
 }
 
 void WriteData(){
  dataFile = SD.open("Data.txt", FILE_WRITE);
- dataFile.print(millis());
+// if(dataFile)
+//      Serial.println(F("file successfully opened"));
+ dataFile.print(time);
  dataFile.print(",");
  dataFile.print(altitude);
  dataFile.print(",");
@@ -191,11 +188,13 @@ void WriteData(){
  dataFile.print(",");
  dataFile.print(accZ);
  dataFile.print(",");
- dataFile.print(brake);
+ dataFile.print(pos);
  dataFile.print(",");
  dataFile.print(Ax);
+  dataFile.print(",");
+ dataFile.print(velocity);
  dataFile.print(",");
- dataFile.println(velocityms5611);
+ dataFile.println(avVelocity);
  dataFile.close();
 }
 
@@ -207,19 +206,19 @@ void LogWrite(short reason){
   
   dataFile = SD.open("Data.txt", FILE_WRITE);
   switch(reason){
-    case 1: dataFile.println("LAUNCH DETECTED");
+    case 1: dataFile.println(F("LAUNCH DETECTED"));
       break;
-    case 2:dataFile.println("ABORT DETECTED");
+    case 2:dataFile.println(F("ABORT DETECTED"));
       break;
-    case 3:dataFile.println("FREEFALL DETECTED");
+    case 3:dataFile.println(F("FREEFALL DETECTED"));
       break;
-    case 4:dataFile.println("BRAKE OPENED");
+    case 4:dataFile.println(F("BRAKE OPENED"));
       break;
-    case 5: dataFile.println("BRAKE CLOSED");
+    case 5: dataFile.println(F("BRAKE CLOSED"));
       break;
-    case 6: dataFile.println("TARGET APOGEE REACHED, VELOCITY > 0, BRAKING UNTIL FREEFALL");
+    case 6: dataFile.println(F("TARGET APOGEE REACHED, VELOCITY > 0, BRAKING UNTIL FREEFALL"));
       break;
-    case 7: dataFile.println("MOTOR BURNOUT");
+    case 7: dataFile.println(F("MOTOR BURNOUT"));
       break;
     default: break;
   }
@@ -235,7 +234,7 @@ void SerialSetup(){
 //            Adjust this to the current settings?
 void ServoSetup(){
   servo.attach(9);
-  servo.write(0);
+  servo.write(35);
 }
 void ServoFunction(){
   
@@ -312,11 +311,12 @@ double Kalman(double UnFV,double FR1,double *Pold){
 
 /* function filtering results in real time with Kalman filter */
 
-  int A=1,un=0,H=1,B=0;
-  double Prediction,P,y,S,K,FR2,Q,R;
+  char A=1,un=0,H=1,B=0;
+  double Prediction,P,y,S,K,FR2;
+  float Q = 0.1, R = 0.2;
 
-    Q=0.1;
-    R=0.2;      // defined these from the Matlab code
+    //Q=0.1;
+   // R=0.2;      // defined these from the Matlab code
   // inputs are Unfiltered Response, Filtered  response, Prediction value old
   // make sure to predefine P and possibly other values at the beginning of the main code. starts at 1
 
@@ -383,7 +383,7 @@ double Integrate(unsigned long prevTime, unsigned long currTime, double Val1, do
 
   double deltaT, deltaA;
   
-  deltaT = (currTime-prevTime)/1000;      // computes deltaT
+  deltaT = (currTime-prevTime)/1000.0;      // computes deltaT
   deltaA = (Val2+Val1)/2;    // computes deltaA
   
   return deltaT*deltaA; //computes and returns Area, the result of the integration
@@ -391,7 +391,7 @@ double Integrate(unsigned long prevTime, unsigned long currTime, double Val1, do
   
 double Derive(unsigned long OldTime, unsigned long time, double altPrev, double altRefine){
   
-  return (altRefine-altPrev)/((double) time -(double) OldTime / 1000);
+  return (altRefine-altPrev)/( ((double) time -(double) OldTime) / 1000);
 }
 
 void Burnout(){
@@ -402,15 +402,14 @@ void Burnout(){
   //Burnout //False when motor is on, true afterwards //output
   
   while(!burnout){
-    UpdateData();   
-//    Serial.println(accX);
-//    Serial.println(Ax);
-    if(Ax <= -(g+1.0))  //checks if vertical acceleration is <= ~ -30
+    UpdateData();
+    WriteData();
+    if(Ax <= -(g-4.0))// && altRefine > 1000)  //checks if vertical acceleration is <= ~ -30
       burnout = true;
   }
 
   LogWrite(7);
-  Serial.println("leaving Burnout");
+  Serial.println(F("leaving Burnout"));
 }
 
 void EndGame(){
@@ -418,26 +417,27 @@ void EndGame(){
   /* Checks if apogee has been reached or if the rocket is on a poor trajectory. 
   If so, the brakes will permanently close and data will be logged until end of flight*/
 
-  
-  if((velocityms5611 < 0 && burnout == true) || ( abs(accY)>=32  || abs(accZ)>=32)){
-    if(velocityms5611 < 0){  
+  if((avVelocity < 0 && burnout == true) || ( abs(accY)>=27  || abs(accZ)>=27)){
+    if(avVelocity < 0){  
       LogWrite(3);    //checks what to write to log file
     }else{
       LogWrite(2);
     }
     
     brake = false;
+    while(pos > 35){
     ServoFunction(); //closes brakes since we set brake to false
+    }
     
     while(true){        //brakes closed, flight data will be logged until computer is turned off
       UpdateData();
       WriteData();
       GPSloop();
     }
-  } else if(altitude > FINALHEIGHT && avVelocity > 0){
+  } else if(altitude > 5 && avVelocity >= 0){
 		LogWrite(6);
 		brake = true;
-		while(avVelocity > 0){
+		while(pos < 125){
 			ServoFunction();
 		}
   }  
@@ -450,28 +450,25 @@ void UpdateData(){
   time = millis();
   GetAcc();
   GetAlt();
+
+  altRefine = Kalman(altitude, altPrev, &PnextALT);
   
-  velocityms5611 = Derive(OldTime, time, altPrev, altitude);   // deriving velocity from position from ms5611
-  accelerationms5611 = Derive(OldTime, time, oldVelocity, velocityms5611);
-  velocity += Integrate(OldTime, time, AxPrev, Ax); //Integrating to get new velocity
- // position+= Integrate(OldTime, time, oldVelocity, velocity);    
+  velocityms5611 = Derive(OldTime, time, altPrev, altRefine);   // deriving velocity from position from ms5611
+  Ax = Kalman(accZ, AxPrev, &PnextAx);
+  velocity += Integrate(OldTime, time, AxPrev, Ax); //Integrating to get new velocity  
   
-  avAcceleration = (accelerationms5611 + accX) / 2.0;
-  avPosition = (position + altitude) / 2.0;
   avVelocity = (velocity + velocityms5611) / 2.0;
-  
-  Ax = Kalman(avAcceleration, AxPrev, &PnextAx);
-  altRefine = Kalman(avPosition, altPrev, &PnextALT);
-  
-   Serial.print("Altrefine:"); Serial.print(altRefine); Serial.print("  Raw alt: "); Serial.print(altitude);
-  Serial.print("   Ax:"); Serial.print(Ax, 4); 
-  Serial.print("  MSvelocity:"); Serial.print(velocityms5611);
-  Serial.print("   velocity:"); Serial.print(velocity, 4);
-  Serial.print(" AvVelocity: "); Serial.println(avVelocity);
+ 
+//   Serial.print("time: "); Serial.print(time);
+//   Serial.print("Altrefine:"); Serial.print(altRefine); Serial.print("  Raw alt: "); Serial.print(altitude);
+//  Serial.print("   Ax:"); Serial.print(Ax, 4); 
+//  Serial.print("  MSvelocity:"); Serial.print(velocityms5611);
+//  Serial.print("   velocity:"); Serial.print(velocity, 4);
+//  Serial.print(" AvVelocity: "); Serial.println(avVelocity);
   
   OldTime=time;   // ms, reassigns time for lower bound at next integration cycle (move this to top of loop to eliminate any time delays between time and oldTime to have a better integration and derivation?)
-  AxPrev=avAcceleration;    // reassigns Ax for initial acceleration at next integration cycle  
-  oldVelocity = velocity; // still need the now old velocity to find position at that time 
+  AxPrev=Ax;    // reassigns Ax for initial acceleration at next integration cycle  
+  //oldVelocity = velocity; // still need the now old velocity to find position at that time 
   altPrev=altRefine;    // reassigns altRefine for initial altitude at next derivation
 
 }

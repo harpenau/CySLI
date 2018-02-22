@@ -16,7 +16,7 @@
 
 #include <I2Cdev.h>   // provides simple and intuitive interfaces to I2C devices
 #include <MPU6050.h>  // IMU library
-//#include <Wire.h>   // allows you to communicate with I2C / TWI devices
+#include <Wire.h>   // allows you to communicate with I2C / TWI devices
 #include <Servo.h>    // servo library
 #include <SPI.h>    // Serial Peripheral Interface(SPI) used for communicating with one or more peripheral devices quickly over short distances
 #include <SD.h>     // microSD card library
@@ -25,9 +25,8 @@
 #include <GPSport.h>
 #include <Streamers.h>
 
-//#define Ridk 1716     // (ft*lb)/(slug*degree_R)  //DIFFERENT NAME??????????????DELETE?????????-------------------------------
 #define g 32.174    // ft/s^2
-#define CDCLOSED 0.675  //The coefficient of drag when the air brakes are closed <-- VERIFY
+#define CDCLOSED 0.675  //The coefficient of drag when the air brakes are closed
 #define AREACLOSED 0.19634  //The area of the rocket when the air brakes are closed
 #define FINALHEIGHT 5280.0  //Final height we want rocket to reach at apogee, in ft
 #define MASS 42.6   //Mass of the rocket in lb (without fuel), SUBJECT TO FREQUENT CHANGE <---------------------
@@ -44,12 +43,10 @@ double PnextALT = 0;    // prediction of next altitude for kalman filter, used e
 double altPrev = 0;     // saved altitude from previous loop
 double altRefine;   // smoothed altitude
 double Ax;      // smoothed x acceleration
-float velocity = 0;    // current velocity
-float oldVelocity = 0;   // saved velocity from previous loop
-//float position = 0;    // current position
-float velocityms5611 = 0;   // velocity from ms5611, derived from position
+double velocity = 0;    // current velocity
+//double oldVelocity = 0;   // saved velocity from previous loop
 double baseline;    // baseline pressure
-float avVelocity;
+double maxHeight = 0; //current max height the rocket has been at
   
 unsigned long time=0;     // current time(stationary once called?), used for integration and derivation
 unsigned long OldTime=0;  // time at end of loop (stationary once called?)
@@ -83,20 +80,21 @@ void setup(){
 
 void loop() { // run code (main code) 
 
-UpdateData();
+  UpdateData();
 
-if(burnout){
-  ApogeePrediction();
-}
+  if(burnout){
+    ApogeePrediction();
+  }
 
-EndGame();
-
-WriteData();
+  EndGame();
+  //GpsLoop();
+  WriteData();
 }
 //--------------------------------------------------------------Beginning of the Functions---------------------------------------------
+
 //------------------------------------------------------------------GPS Functions------------------------------------------------------
 void GpsSetup(){
-   DEBUG_PORT.begin(9600);
+  DEBUG_PORT.begin(9600);
   while (!DEBUG_PORT);
 
   DEBUG_PORT.print( F("NMEA.INO: started\n") );
@@ -155,7 +153,7 @@ static void GPSloop(){
     fix = gps.read();
     doSomeWork();
   }
-} // GPSloop
+}
 //-----------------------------------------------------------------SD Card Functions---------------------------------------------------
 void SDcardSetup(){
   /*Set up sd card to read RC data*/
@@ -166,9 +164,7 @@ void SDcardSetup(){
 
 void SDcardWriteSetup(){
   dataFile = SD.open("Data.txt", FILE_WRITE);
-  if(dataFile)
-      Serial.println(F("file successfullly opened"));
-  dataFile.println(F("Time(ms),Height(ft),F Alt(ft),AccX(ft/s^2),AccY(ft/s^2),AccZ(ft/s^2),Brake Status, F Acc(ft/s^2),SlopeVel(ft/s)"));
+  dataFile.println(F("Time(ms),Height(ft),F Alt(ft),AccX(ft/s^2),AccY(ft/s^2),AccZ(ft/s^2),Brake Angle, F Acc(ft/s^2),SlopeVel(ft/s)"));
   dataFile.close(); 
 }
 
@@ -191,10 +187,8 @@ void WriteData(){
  dataFile.print(pos);
  dataFile.print(",");
  dataFile.print(Ax);
-  dataFile.print(",");
- dataFile.print(velocity);
  dataFile.print(",");
- dataFile.println(avVelocity);
+ dataFile.println(velocity);
  dataFile.close();
 }
 
@@ -234,7 +228,7 @@ void SerialSetup(){
 //            Adjust this to the current settings?
 void ServoSetup(){
   servo.attach(9);
-  servo.write(35);
+  servo.write(pos);
 }
 void ServoFunction(){
   
@@ -242,22 +236,24 @@ void ServoFunction(){
     we want brakes to open. If false, brakes will closed. */
     
   if(brake){
-	if(pos < 125){
-      LogWrite(4);
-      pos = pos + 10;
-      servo.write(pos);
-    }
+      if(pos < 125){
+        LogWrite(4);
+        pos += 10;  //opens brakes 10 more degrees
+        servo.write(pos);
+      }
   } else if (pos > 35){
       LogWrite(5);
-      pos = pos - 10;
+      pos -=10;     //closes brakes by 10 deg
       servo.write(pos);
-    }
+  }
   
 }
 //-------------------------------------------------------------------ms5611 180 Methods----------------------------------------------------
 
 void ms5611Setup(){
+  Serial.print("in begin()");
   ms5611.begin();
+  Serial.print("finished begin");
   baseline = ms5611.readPressure();
 }
 
@@ -286,9 +282,7 @@ void Resetms5611(){
 //--------------------------------------------------------------------MPU 6050 Methods--------------------------------------------------
 void GetAcc(){
    mpu.getAcceleration(&accX, &accY, &accZ);
-   //what is map?
    accX = map(accX, 0, 4096, 0, 32);
-//   Serial.print(accX);
    accY = map(accY, 0, 4096, 0, 32);
    accZ = 0-map(accZ, 0, 4096, 0, 32);
 }
@@ -365,7 +359,6 @@ double ApogeePrediction(){
   else
   {
     brake = false;
-  
   }
   ServoFunction();
 }
@@ -404,7 +397,7 @@ void Burnout(){
   while(!burnout){
     UpdateData();
     WriteData();
-    if(Ax <= -(g-4.0))// && altRefine > 1000)  //checks if vertical acceleration is <= ~ -30
+    if(Ax <= -(g-2.0));// && altRefine > 6)  //checks if vertical acceleration is <= ~ -30
       burnout = true;
   }
 
@@ -417,8 +410,8 @@ void EndGame(){
   /* Checks if apogee has been reached or if the rocket is on a poor trajectory. 
   If so, the brakes will permanently close and data will be logged until end of flight*/
 
-  if((avVelocity < 0 && burnout == true) || ( abs(accY)>=27  || abs(accZ)>=27)){
-    if(avVelocity < 0){  
+  if( ( (maxHeight > (altRefine+5) ) && /*&& (velocity < -5000) && */ burnout) || ( abs(accX)>=27  || abs(accY)>=27) ){//pelican
+    if(maxHeight > (altRefine+5)){  
       LogWrite(3);    //checks what to write to log file
     }else{
       LogWrite(2);
@@ -426,7 +419,7 @@ void EndGame(){
     
     brake = false;
     while(pos > 35){
-    ServoFunction(); //closes brakes since we set brake to false
+      ServoFunction(); //closes brakes since we set brake to false
     }
     
     while(true){        //brakes closed, flight data will be logged until computer is turned off
@@ -434,12 +427,13 @@ void EndGame(){
       WriteData();
       GPSloop();
     }
-  } else if(altitude > 5 && avVelocity >= 0){
-		LogWrite(6);
-		brake = true;
-		while(pos < 125){
-			ServoFunction();
-		}
+  } else if(altRefine > 5300){
+    printf("over target apogee, deploying brakes to full stop");
+    LogWrite(6);
+    brake = true;
+    while(pos < 125){
+      ServoFunction();
+    }
   }  
 }
 
@@ -453,22 +447,24 @@ void UpdateData(){
 
   altRefine = Kalman(altitude, altPrev, &PnextALT);
   
-  velocityms5611 = Derive(OldTime, time, altPrev, altRefine);   // deriving velocity from position from ms5611
-  Ax = Kalman(accZ, AxPrev, &PnextAx);
+  Ax = Kalman(accZ, AxPrev, &PnextAx);//pelican
   velocity += Integrate(OldTime, time, AxPrev, Ax); //Integrating to get new velocity  
   
-  avVelocity = (velocity + velocityms5611) / 2.0;
- 
-//   Serial.print("time: "); Serial.print(time);
-//   Serial.print("Altrefine:"); Serial.print(altRefine); Serial.print("  Raw alt: "); Serial.print(altitude);
-//  Serial.print("   Ax:"); Serial.print(Ax, 4); 
-//  Serial.print("  MSvelocity:"); Serial.print(velocityms5611);
-//  Serial.print("   velocity:"); Serial.print(velocity, 4);
-//  Serial.print(" AvVelocity: "); Serial.println(avVelocity);
+//  brake = true;
+//  ServoFunction();
+//  delay(1000);
+//  ServoFunction();
+//  delay(1000);
+
+   Serial.print("time: "); Serial.print(time); Serial.print("Altrefine:"); Serial.print(altRefine);
+  Serial.print("   Ax:"); Serial.print(Ax, 4); 
+  Serial.print("   velocity:"); Serial.println(velocity, 4);
   
   OldTime=time;   // ms, reassigns time for lower bound at next integration cycle (move this to top of loop to eliminate any time delays between time and oldTime to have a better integration and derivation?)
   AxPrev=Ax;    // reassigns Ax for initial acceleration at next integration cycle  
   //oldVelocity = velocity; // still need the now old velocity to find position at that time 
   altPrev=altRefine;    // reassigns altRefine for initial altitude at next derivation
+  if(altRefine > maxHeight)
+    maxHeight = altRefine;
 
 }

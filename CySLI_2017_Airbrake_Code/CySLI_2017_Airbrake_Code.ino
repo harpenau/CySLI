@@ -75,6 +75,7 @@ void setup(){
   SDcardSetup();
   SDcardWriteSetup();     //setup sd card to write data to
   GpsSetup();
+  OldTime=millis();
   Burnout();
 }
 
@@ -377,8 +378,8 @@ double Integrate(unsigned long prevTime, unsigned long currTime, double Val1, do
   double deltaT, deltaA;
   
   deltaT = (currTime-prevTime)/1000.0;      // computes deltaT
-  deltaA = (Val2+Val1)/2;    // computes deltaA
-  
+ // deltaA = (Val2+Val1)/2;    // computes deltaA
+  deltaA=(Val2-Val1);
   return deltaT*deltaA; //computes and returns Area, the result of the integration
 } 
   
@@ -397,7 +398,7 @@ void Burnout(){
   while(!burnout){
     UpdateData();
     WriteData();
-    if(Ax <= -(g-2.0));// && altRefine > 6)  //checks if vertical acceleration is <= ~ -30
+    if(Ax <= -(g-2.0)) // && altRefine > 2000) //pelican //checks if vertical acceleration is <= ~ -30
       burnout = true;
   }
 
@@ -410,8 +411,8 @@ void EndGame(){
   /* Checks if apogee has been reached or if the rocket is on a poor trajectory. 
   If so, the brakes will permanently close and data will be logged until end of flight*/
 
-  if( ( (maxHeight > (altRefine+5) ) && /*&& (velocity < -5000) && */ burnout) || ( abs(accX)>=27  || abs(accY)>=27) ){//pelican
-    if(maxHeight > (altRefine+5)){  
+  if( ( (maxHeight > (altRefine+5) ) && (velocity < -50) && burnout) || ( abs(accX)>=27  || abs(accY)>=27) ){//pelican
+    if(maxHeight > (altRefine+5) && (velocity < -50) ){  
       LogWrite(3);    //checks what to write to log file
     }else{
       LogWrite(2);

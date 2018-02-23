@@ -47,6 +47,8 @@ double velocity = 0;    // current velocity
 //double oldVelocity = 0;   // saved velocity from previous loop
 double baseline;    // baseline pressure
 double maxHeight = 0; //current max height the rocket has been at
+double aPrev = 0;
+double totalv = 0;
   
 unsigned long time=0;     // current time(stationary once called?), used for integration and derivation
 unsigned long OldTime=0;  // time at end of loop (stationary once called?)
@@ -159,8 +161,8 @@ static void GPSloop(){
 void SDcardSetup(){
   /*Set up sd card to read RC data*/
   
-  pinMode(4, OUTPUT);
-    SD.begin(4);  
+  pinMode(53, OUTPUT);
+    SD.begin(53);  
 }
 
 void SDcardWriteSetup(){
@@ -189,7 +191,9 @@ void WriteData(){
  dataFile.print(",");
  dataFile.print(Ax);
  dataFile.print(",");
- dataFile.println(velocity);
+ dataFile.print(velocity);
+ dataFile.print(",");
+ dataFile.println(totalv);
  dataFile.close();
 }
 
@@ -203,13 +207,13 @@ void LogWrite(short reason){
   switch(reason){
     case 1: dataFile.println(F("LAUNCH DETECTED"));
       break;
-    case 2:dataFile.println(F("ABORT DETECTED"));
+    case 2:dataFile.println(F("ABNORMAL FLIGHT DETECTED"));
       break;
     case 3:dataFile.println(F("FREEFALL DETECTED"));
       break;
-    case 4:dataFile.println(F("BRAKE OPENED"));
+    case 4:dataFile.println(F("BRAKE OPENED 10 DEG"));
       break;
-    case 5: dataFile.println(F("BRAKE CLOSED"));
+    case 5: dataFile.println(F("BRAKE CLOSED 10 DEG"));
       break;
     case 6: dataFile.println(F("TARGET APOGEE REACHED, VELOCITY > 0, BRAKING UNTIL FREEFALL"));
       break;
@@ -252,9 +256,7 @@ void ServoFunction(){
 //-------------------------------------------------------------------ms5611 180 Methods----------------------------------------------------
 
 void ms5611Setup(){
-  Serial.print("in begin()");
   ms5611.begin();
-  Serial.print("finished begin");
   baseline = ms5611.readPressure();
 }
 
@@ -316,7 +318,7 @@ double Kalman(double UnFV,double FR1,double *Pold){
   // make sure to predefine P and possibly other values at the beginning of the main code. starts at 1
 
   //UnFV    // unfiltered value from sensors read in (zn)           -internal logic
-  //FR1       // read this variable in from main (AX(i)) defined last iteration -internal logic
+  //FR1       // read this variable in from main (AX(i)) defined last iteration -internal logicexc
   //Pold      // output Pold and read in Pold from last iteration         -input,output
   //Q     // sensor specific value, we might default this           -input
   //R     // sensor specific value, we might default this           -input
@@ -398,7 +400,7 @@ void Burnout(){
   while(!burnout){
     UpdateData();
     WriteData();
-    if(Ax <= -(g-2.0)) // && altRefine > 2000) //pelican //checks if vertical acceleration is <= ~ -30
+    if(Ax <= -(g-2.0) && altRefine > 2) //pelican //checks if vertical acceleration is <= ~ -30
       burnout = true;
   }
 
@@ -411,8 +413,8 @@ void EndGame(){
   /* Checks if apogee has been reached or if the rocket is on a poor trajectory. 
   If so, the brakes will permanently close and data will be logged until end of flight*/
 
-  if( ( (maxHeight > (altRefine+5) ) && (velocity < -50) && burnout) || ( abs(accX)>=27  || abs(accY)>=27) ){//pelican
-    if(maxHeight > (altRefine+5) && (velocity < -50) ){  
+  if( ( (maxHeight > (altRefine+3) ) && (velocity < -2) && burnout) ){ //|| ( abs(accX)>=27  || abs(accY)>=27) ){//pelican
+    if(maxHeight > (altRefine+3) && (velocity < -2) ){  //pelican
       LogWrite(3);    //checks what to write to log file
     }else{
       LogWrite(2);
@@ -429,7 +431,7 @@ void EndGame(){
       GPSloop();
     }
   } else if(altRefine > 5300){
-    printf("over target apogee, deploying brakes to full stop");
+    //printf("over target apogee, deploying brakes to full stop");
     LogWrite(6);
     brake = true;
     while(pos < 125){
@@ -450,12 +452,17 @@ void UpdateData(){
   
   Ax = Kalman(accZ, AxPrev, &PnextAx);//pelican
   velocity += Integrate(OldTime, time, AxPrev, Ax); //Integrating to get new velocity  
-  
+  totalv += Integrate(OldTime,time, aPrev, sqrt(Ax*Ax+accX*accX+accY*accY));
+//  
+//  if(pos == 35)
 //  brake = true;
+//  if(pos == 125)
+//  brake = false;
+//  
 //  ServoFunction();
-//  delay(1000);
+//  delay(100);
 //  ServoFunction();
-//  delay(1000);
+//  delay(100);
 
    Serial.print("time: "); Serial.print(time); Serial.print("Altrefine:"); Serial.print(altRefine);
   Serial.print("   Ax:"); Serial.print(Ax, 4); 
@@ -463,6 +470,7 @@ void UpdateData(){
   
   OldTime=time;   // ms, reassigns time for lower bound at next integration cycle (move this to top of loop to eliminate any time delays between time and oldTime to have a better integration and derivation?)
   AxPrev=Ax;    // reassigns Ax for initial acceleration at next integration cycle  
+  aPrev = sqrt(Ax*Ax+accX*accX+accY*accY);
   //oldVelocity = velocity; // still need the now old velocity to find position at that time 
   altPrev=altRefine;    // reassigns altRefine for initial altitude at next derivation
   if(altRefine > maxHeight)

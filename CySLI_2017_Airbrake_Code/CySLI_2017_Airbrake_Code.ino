@@ -29,7 +29,7 @@
 #define CDCLOSED 0.675  //The coefficient of drag when the air brakes are closed
 #define AREACLOSED 0.19634  //The area of the rocket when the air brakes are closed
 #define FINALHEIGHT 5280.0  //Final height we want rocket to reach at apogee, in ft
-#define MASS 42.6   //Mass of the rocket in lb (without fuel), SUBJECT TO FREQUENT CHANGE <---------------------
+#define MASS 1.448   //Mass of the rocket in lb (without fuel), SUBJECT TO FREQUENT CHANGE <---------------------
 
 short pos=35;      // postition of the servo (degrees?)
 
@@ -41,15 +41,15 @@ double AxPrev = 0;    // previous x acceleration
 double PnextAx = 0;   // prediction of next x acceleration for kalman filter, used exclusively in the kalman function
 double PnextALT = 0;    // prediction of next altitude for kalman filter, used exclusively in the kalman function
 double altPrev = 0;     // saved altitude from previous loop
-double altRefine;   // smoothed altitude
-double Ax;      // smoothed x acceleration
+double altRefine = 0;   // smoothed altitude
+double Ax = 0;      // smoothed x acceleration
 double velocity = 0;    // current velocity
 //double oldVelocity = 0;   // saved velocity from previous loop
 double baseline;    // baseline pressure
 double maxHeight = 0; //current max height the rocket has been at
 double aPrev = 0;
 double totalv = 0;
-  
+double projHeight = 0;
 unsigned long time=0;     // current time(stationary once called?), used for integration and derivation
 unsigned long OldTime=0;  // time at end of loop (stationary once called?)
 
@@ -77,7 +77,6 @@ void setup(){
   SDcardSetup();
   SDcardWriteSetup();     //setup sd card to write data to
   GpsSetup();
-  OldTime=millis();
   Burnout();
 }
 
@@ -167,7 +166,7 @@ void SDcardSetup(){
 
 void SDcardWriteSetup(){
   dataFile = SD.open("Data.txt", FILE_WRITE);
-  dataFile.println(F("Time(ms),Height(ft),F Alt(ft),AccX(ft/s^2),AccY(ft/s^2),AccZ(ft/s^2),Brake Angle, F Acc(ft/s^2),SlopeVel(ft/s)"));
+  dataFile.println(F("Time(ms),Height(ft),F Alt(ft),AccX(ft/s^2),AccY(ft/s^2),AccZ(ft/s^2),Brake Angle, F Acc(ft/s^2),SlopeVel(ft/s),totalv,ap"));
   dataFile.close(); 
 }
 
@@ -187,13 +186,15 @@ void WriteData(){
  dataFile.print(",");
  dataFile.print(accZ);
  dataFile.print(",");
- dataFile.print(pos);
+ dataFile.print(pos - 35);
  dataFile.print(",");
  dataFile.print(Ax);
  dataFile.print(",");
  dataFile.print(velocity);
  dataFile.print(",");
- dataFile.println(totalv);
+ dataFile.print(totalv);
+ dataFile.print(",");
+ dataFile.println(projHeight);
  dataFile.close();
 }
 
@@ -232,7 +233,7 @@ void SerialSetup(){
 //-----------------------------------------------------------Servo Methods--------------------------------------------------------------                                   
 //            Adjust this to the current settings?
 void ServoSetup(){
-  servo.attach(9);
+  servo.attach(47);
   servo.write(pos);
 }
 void ServoFunction(){
@@ -286,8 +287,8 @@ void Resetms5611(){
 void GetAcc(){
    mpu.getAcceleration(&accX, &accY, &accZ);
    accX = map(accX, 0, 4096, 0, 32);
-   accY = map(accY, 0, 4096, 0, 32);
-   accZ = 0-map(accZ, 0, 4096, 0, 32);
+   accY = map(accY, 0, 4096, 0, 32); //if y is pointing up (or usb port) subtract 31
+   accZ = map(accZ, 0, 4096, 0, 32)-31.0; //pelican?
 }
 
 void MpuSetup(){
@@ -339,22 +340,16 @@ double Kalman(double UnFV,double FR1,double *Pold){
 
 double ApogeePrediction(){
 
-  //all heights are in ft, multiplier has no dimenstions
-  double projHeight;        //The projected final height with no air brakes at this moment in time
-  //double desiredFinalHeight;    //The final height that the rocket should reach at this moment in time
-  //double multiplier;        //This is multiplied with FINALHEIGHT to equal desiredFinalHeight
-  double k;           //Drag to be used tp calculate extraHeight
-  //double extraHeight;       //This is added to ALTREFINE to equal projectedHeight
-
+  //all heights are in ft
+  //double projHeight;        //The projected final height with no air brakes at this moment in time
+  //double k ;           //Drag to be used tp calculate extraHeight
 
   //Calcualtes projectedHeight
-  k = 0.5 * AREACLOSED * CDCLOSED * 0.07262; //from old code, check constants
+  double k = 0.5 * AREACLOSED * CDCLOSED * 0.0022; //from old code, check constants
   projHeight = (MASS / (2.0 * k)) * log(((MASS * g) +(k * velocity * velocity)) / (MASS * g)) + altRefine;
 
-  //Calculates desiredFinalHeight
-  //multiplier = ((204 - (double) whichBrake) / 200); //figure out whichBrake
-
   //If projectedHeight will surpass desiredFinalHeight
+  Serial.print("AP:"); Serial.print(projHeight);
   if (projHeight > FINALHEIGHT) // + ERROR)
   {
     brake = true;
@@ -396,14 +391,23 @@ void Burnout(){
   
   //Ax    //Filtered vertical acceleration      //input
   //Burnout //False when motor is on, true afterwards //output
+  OldTime = time = millis();
+  UpdateData();
+  UpdateData();
+  UpdateData();
+  UpdateData();
+  UpdateData();
+  UpdateData();
+  UpdateData();
+  velocity = 0;
   
   while(!burnout){
     UpdateData();
     WriteData();
-    if(Ax <= -(g-2.0) && altRefine > 2) //pelican //checks if vertical acceleration is <= ~ -30
+    if(Ax <= -(g-16.0) && altRefine > 0.5) //pelican //checks if vertical acceleration is <= ~ -30 && is over a set height
       burnout = true;
   }
-
+  
   LogWrite(7);
   Serial.println(F("leaving Burnout"));
 }
@@ -413,8 +417,8 @@ void EndGame(){
   /* Checks if apogee has been reached or if the rocket is on a poor trajectory. 
   If so, the brakes will permanently close and data will be logged until end of flight*/
 
-  if( ( (maxHeight > (altRefine+3) ) && (velocity < -2) && burnout) ){ //|| ( abs(accX)>=27  || abs(accY)>=27) ){//pelican
-    if(maxHeight > (altRefine+3) && (velocity < -2) ){  //pelican
+  if( ( (maxHeight > (altRefine+0.3) ) && (velocity < -0.5) && burnout) ){ //|| ( abs(accX)>=27  || abs(accY)>=27) ){//pelican
+    if(maxHeight > (altRefine+0.5) && (velocity < -0.5) ){  //pelican
       LogWrite(3);    //checks what to write to log file
     }else{
       LogWrite(2);
@@ -430,8 +434,7 @@ void EndGame(){
       WriteData();
       GPSloop();
     }
-  } else if(altRefine > 5300){
-    //printf("over target apogee, deploying brakes to full stop");
+  } else if(altRefine > 5200){ //pelican
     LogWrite(6);
     brake = true;
     while(pos < 125){
@@ -449,30 +452,32 @@ void UpdateData(){
   GetAlt();
 
   altRefine = Kalman(altitude, altPrev, &PnextALT);
-  
   Ax = Kalman(accZ, AxPrev, &PnextAx);//pelican
+  
   velocity += Integrate(OldTime, time, AxPrev, Ax); //Integrating to get new velocity  
   totalv += Integrate(OldTime,time, aPrev, sqrt(Ax*Ax+accX*accX+accY*accY));
-//  
-//  if(pos == 35)
-//  brake = true;
-//  if(pos == 125)
-//  brake = false;
-//  
-//  ServoFunction();
-//  delay(100);
-//  ServoFunction();
-//  delay(100);
+  
+  if(pos == 35)
+    brake = true;
+  if(pos == 125)
+    brake = false;
+  
+  ServoFunction();
+  delay(500);
+  ServoFunction();
+  delay(500);
 
-   Serial.print("time: "); Serial.print(time); Serial.print("Altrefine:"); Serial.print(altRefine);
-  Serial.print("   Ax:"); Serial.print(Ax, 4); 
-  Serial.print("   velocity:"); Serial.println(velocity, 4);
+//   Serial.print("time: "); Serial.print(time); Serial.print("  Altrefine:"); Serial.print(altRefine);
+  //Serial.print("   Ax:"); Serial.println(Ax, 4); 
+//  Serial.print("   velocity:"); Serial.print(velocity, 4);
+//  Serial.print(  "totalv: "); Serial.println(totalv, 4);
   
   OldTime=time;   // ms, reassigns time for lower bound at next integration cycle (move this to top of loop to eliminate any time delays between time and oldTime to have a better integration and derivation?)
   AxPrev=Ax;    // reassigns Ax for initial acceleration at next integration cycle  
   aPrev = sqrt(Ax*Ax+accX*accX+accY*accY);
   //oldVelocity = velocity; // still need the now old velocity to find position at that time 
   altPrev=altRefine;    // reassigns altRefine for initial altitude at next derivation
+  
   if(altRefine > maxHeight)
     maxHeight = altRefine;
 

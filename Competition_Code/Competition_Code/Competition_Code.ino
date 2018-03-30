@@ -211,7 +211,7 @@ void LogWrite(short reason){
       break;
     case 4:dataFile.println(F("BRAKE OPENED 5 DEG"));
       break;
-    case 5: dataFile.println(F("BRAKE CLOSED 5 DEG"));
+    case 5: dataFile.println(F("BRAKE CLOSED"));
       break;
     case 6: dataFile.println(F("TARGET APOGEE REACHED, VEL > 0, BRAKING UNTIL FREEFALL"));
       break;
@@ -246,7 +246,7 @@ void ServoFunction(){
       }
   } else if (pos > 35){
       LogWrite(5);
-      pos -=5;     //closes brakes by 10 deg
+      pos = 35;     //closes brakes 
       servo.write(pos);
   }
   
@@ -421,18 +421,16 @@ void EndGame(){
 //    }
 
     brake = false;
-    while(pos > 35){
-      ServoFunction(); //closes brakes since we set brake to false
-      delay(50);
-      WriteData();
-    }
+    ServoFunction(); //closes brakes since we set brake to false
+    WriteData();
     
     while(true){        //brakes closed, flight data will be logged until computer is turned off
       UpdateData();
       WriteData();
       GPSloop();
     }
-  } else if(altRefine > 4800){ //pelican
+    
+  } else if(altRefine > 5150){ //pelican
     LogWrite(6);
     brake = true;
     while(pos < 125){
@@ -446,11 +444,7 @@ void EndGame(){
         if( maxHeight > (altRefine+25) ){ //pelican
             LogWrite(3);    
             brake = false;
-            while(pos > 35){
-                ServoFunction(); 
-                delay(50);
-                WriteData();
-            }
+            ServoFunction(); 
     
             while(true){        //brakes closed, flight data will be logged until computer is turned off
                 UpdateData();
@@ -481,7 +475,7 @@ void UpdateData(){
 // Serial.print(  "Ax: "); Serial.print(Ax, 4);
 // Serial.print("   velocity:"); Serial.print(velocity, 4);
 // Serial.print(  "totalv: "); Serial.println("");
- delay(500);
+ //delay(500);
   
   OldTime=time;   // ms, reassigns time for lower bound at next integration cycle (move this to top of loop to eliminate any time delays between time and oldTime to have a better integration and derivation?)
   // AxPrev=Ax;    // reassigns Ax for initial acceleration at next integration cycle  

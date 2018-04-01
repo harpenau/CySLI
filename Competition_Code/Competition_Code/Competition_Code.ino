@@ -26,10 +26,10 @@
 #include <Streamers.h>
 
 #define g 32.174    // gravity, ft/s^2
-#define CDCLOSED 0.675  //The coefficient of drag when the air brakes are closed
+#define CDCLOSED 0.529  //The coefficient of drag when the air brakes are closed pelican, should this be updated to recent
 #define AREACLOSED 0.19634  //The area of the rocket when the air brakes are closed
 #define FINALHEIGHT 5280.0  //Final height we want rocket to reach at apogee, in ft
-#define MASS 46.6   //Mass of the rocket in lb (without fuel), SUBJECT TO FREQUENT CHANGE <---------------------
+#define MASS 46.6   //Mass of the rocket in lb (without fuel), SUBJECT TO FREQUENT CHANGE <---------------------pelican update after paint weigh in 
 
 short pos=35;      // postition of the servo, defaults to closed position (degrees)
 
@@ -57,7 +57,6 @@ static gps_fix  fix;
 
 //Objects
 MS5611 ms5611;
-
 MPU6050 mpu;
 Servo servo;        //airbrake servo
 File dataFile;      // the datafile variable to save stuff to microSD
@@ -190,7 +189,7 @@ void WriteData(){
  dataFile.print(Ax);
  dataFile.print(",");
  dataFile.print(velocity);
- dataFile.print(",");  //pelican
+ dataFile.print(",");  
  dataFile.println(projHeight);
  dataFile.close();
 }
@@ -285,7 +284,7 @@ void GetAcc(){
    mpu.getAcceleration(&accX, &accY, &accZ);
    accX = map(accX, 0, 4096, 0, 32);
    accY = map(accY, 0, 4096, 0, 32)-correction; //if y is pointing up (or usb port) subtract 31
-   accZ = map(accZ, 0, 4096, 0, 32); //pelican?
+   accZ = map(accZ, 0, 4096, 0, 32); //pelican
 }
 
 void MpuSetup(){
@@ -296,9 +295,8 @@ void MpuSetup(){
         Fastwire::setup(400, true);
     #endif
     mpu.initialize();
-    mpu.setFullScaleAccelRange(3);  //0=2g, 1=4g, 2=8g, 3=16g //pelicannnn
+    mpu.setFullScaleAccelRange(3);  //0=2g, 1=4g, 2=8g, 3=16g 
     mpu.setFullScaleGyroRange(2); //0=250 deg/s, 1=500 deg/s, 2=1000 deg/s, 3=2000 deg/s 
-//    calibrateMPU();                                    // <------------------------does this exist?
 }
 
 //------------------------------------------------------------IMPORTANT FUNCTIONS-------------------------------------------------------
@@ -371,7 +369,7 @@ double Integrate(unsigned long prevTime, unsigned long currTime, double Val) {
 
   double deltaT, deltaA;
   
-  deltaT = (currTime-prevTime)/1000.0;      // computes deltaT
+  deltaT = (currTime-prevTime)/1000.0;      // computes deltaT in seconds
   return Val*deltaT; //computes and returns Area, the result of the integration
 } 
   
@@ -389,9 +387,7 @@ void Burnout(){
   
   OldTime = time = millis();
   UpdateData();
-  UpdateData();
-  correction = 0-accY;
-  velocity = 0;
+  correction = accY; //pelican 
   
   while(Ax < 15){
     UpdateData();
@@ -414,23 +410,19 @@ void EndGame(){
   If so, the brakes will permanently close and data will be logged until end of flight*/
 
   if( ( (maxHeight > (altRefine+30) ) && (velocity < -50))){//pelican
-    if(maxHeight > (altRefine+30) && (velocity < -50) ){  //pelican
+//    if(maxHeight > (altRefine+30) && (velocity < -50) ){  //pelican
       LogWrite(3);    //checks what to write to log file
-//    }else{
-//      LogWrite(2);
-//    }
-
-    brake = false;
-    ServoFunction(); //closes brakes since we set brake to false
-    WriteData();
-    
-    while(true){        //brakes closed, flight data will be logged until computer is turned off
-      UpdateData();
+      brake = false;
+      ServoFunction(); //closes brakes since we set brake to false
       WriteData();
-      GPSloop();
-    }
     
-  } else if(altRefine > 5150){ //pelican
+      while(true){        //brakes closed, flight data will be logged until computer is turned off
+        UpdateData();
+        WriteData();
+        GPSloop();
+      }
+    
+  } else if(altRefine > 5280){ //pelican 
     LogWrite(6);
     brake = true;
     while(pos < 125){
@@ -466,20 +458,14 @@ void UpdateData(){
   GetAlt();
 
   altRefine = Kalman(altitude, altPrev, &PnextALT);
-  Ax = Kalman(accY, AxPrev, &PnextAx);//pelican
+  Ax = Kalman(accY, AxPrev, &PnextAx);
   
   velocity += Integrate(OldTime, time, Ax); //Integrating to get new velocity  
-// ServoTest();
-
-// Serial.print("   alt:"); Serial.print(altRefine);
-// Serial.print(  "Ax: "); Serial.print(Ax, 4);
-// Serial.print("   velocity:"); Serial.print(velocity, 4);
-// Serial.print(  "totalv: "); Serial.println("");
- //delay(500);
+  // ServoTest();
   
   OldTime=time;   // ms, reassigns time for lower bound at next integration cycle (move this to top of loop to eliminate any time delays between time and oldTime to have a better integration and derivation?)
   // AxPrev=Ax;    // reassigns Ax for initial acceleration at next integration cycle  
-  //aPrev = sqrt(accX*accX+accY*accY);
+  // aPrev = sqrt(accX*accX+accY*accY);
   // altPrev=altRefine;    // reassigns altRefine for initial altitude at next derivation
   
   if(altRefine > maxHeight)

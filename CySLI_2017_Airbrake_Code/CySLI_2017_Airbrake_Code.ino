@@ -165,7 +165,7 @@ void SDcardSetup(){
 
 void SDcardWriteSetup(){
   dataFile = SD.open("Data.txt", FILE_WRITE);
-  dataFile.println(F("Time(ms),Height(ft),F Alt(ft),AccX(ft/s^2),AccY(ft/s^2),AccZ(ft/s^2),Brake Angle, F Acc(ft/s^2),zVel(ft/s),AP(ft)"));
+  dataFile.println(F("Time(ms),F Alt(ft),AccY(ft/s^2), F Acc(ft/s^2),zVel(ft/s)"));
   dataFile.close(); 
 }
 
@@ -175,23 +175,23 @@ void WriteData(){
 //      Serial.println(F("file successfully opened"));
  dataFile.print(time);
  dataFile.print(",");
- dataFile.print(altitude);
- dataFile.print(",");
+// dataFile.print(altitude);
+// dataFile.print(",");
  dataFile.print(altRefine);
  dataFile.print(",");
- dataFile.print(accX);  
- dataFile.print(",");
+// dataFile.print(accX);  
+// dataFile.print(",");
  dataFile.print(accY);
  dataFile.print(",");
- dataFile.print(accZ);
- dataFile.print(",");
- dataFile.print(pos - 35);
- dataFile.print(",");
+// dataFile.print(accZ);
+// dataFile.print(",");
+// dataFile.print(pos - 35);
+// dataFile.print(",");
  dataFile.print(Ax);
  dataFile.print(",");
- dataFile.print(velocity);
- dataFile.print(",");  //pelican
- dataFile.println(projHeight);
+ dataFile.println(velocity);
+ //dataFile.print(",");  //pelican
+ //dataFile.println(projHeight);
  dataFile.close();
 }
 
@@ -205,13 +205,13 @@ void LogWrite(short reason){
   switch(reason){
     case 1: dataFile.println(F("LAUNCH DETECTED"));
       break;
-    case 2:dataFile.println(F("ABNORMAL FLIGHT DETECTED"));
+    case 2:dataFile.println(F("LAUNCH DETECTED"));
       break;
     case 3:dataFile.println(F("FREEFALL DETECTED"));
       break;
     case 4:dataFile.println(F("BRAKE OPENED 5 DEG"));
       break;
-    case 5: dataFile.println(F("BRAKE CLOSED 5 DEG"));
+    case 5: dataFile.println(F("BRAKE CLOSED"));
       break;
     case 6: dataFile.println(F("TARGET APOGEE REACHED, VEL > 0, BRAKING UNTIL FREEFALL"));
       break;
@@ -246,7 +246,7 @@ void ServoFunction(){
       }
   } else if (pos > 35){
       LogWrite(5);
-      pos -=5;     //closes brakes by 10 deg
+      pos = 35;     //closes brakes by 10 deg
       servo.write(pos);
   }
   
@@ -369,7 +369,7 @@ double Integrate(unsigned long prevTime, unsigned long currTime, double Val) {
   //prevTime       //Previous time         -input
   //currTime       //time current          -input
 
-  double deltaT, deltaA;
+  double deltaT;
   
   deltaT = (currTime-prevTime)/1000.0;      // computes deltaT
   return Val*deltaT; //computes and returns Area, the result of the integration
@@ -390,22 +390,24 @@ void Burnout(){
   OldTime = time = millis();
   UpdateData();
   UpdateData();
-  correction = 0-accY;
-  velocity = 0;
-  
-  while(Ax < 15){
+  WriteData();
+  correction = accY;
+  UpdateData();
+  while(Ax < 3){
     UpdateData();
+    WriteData();
   }
+  LogWrite(2);
   velocity = 0;
   while(!burnout){
     UpdateData();
     WriteData();
-    if(Ax <= -(g-3.0) && altRefine > 1250) //pelican //checks if vertical acc is <= ~ -30 && is over a set height
+    if(Ax <= -(g-3.0) && altRefine > 0.5) //pelican //checks if vertical acc is <= ~ -30 && is over a set height
       burnout = true;
   }
   
   LogWrite(7);
- // Serial.println(F("leaving Burnout"));
+  Serial.println(F("leaving Burnout"));
 }
 
 void EndGame(){
@@ -413,26 +415,19 @@ void EndGame(){
   /* Checks if apogee has been reached or if the rocket is on a poor trajectory. 
   If so, the brakes will permanently close and data will be logged until end of flight*/
 
-  if( ( (maxHeight > (altRefine+30) ) && (velocity < -50))){//pelican
-    if(maxHeight > (altRefine+30) && (velocity < -50) ){  //pelican
-      LogWrite(3);    //checks what to write to log file
-//    }else{
-//      LogWrite(2);
-//    }
-
+  if( ( (maxHeight > (altRefine+1) ) && (velocity < -2))){//pelican
+    
+    LogWrite(3);    //checks what to write to log file
     brake = false;
-    while(pos > 35){
-      ServoFunction(); //closes brakes since we set brake to false
-      delay(50);
-      WriteData();
-    }
+    ServoFunction(); //closes brakes since we set brake to false
+    WriteData();
     
     while(true){        //brakes closed, flight data will be logged until computer is turned off
       UpdateData();
       WriteData();
       GPSloop();
     }
-  } else if(altRefine > 4800){ //pelican
+  } else if(altRefine > 3){ //pelican
     LogWrite(6);
     brake = true;
     while(pos < 125){
@@ -446,11 +441,7 @@ void EndGame(){
         if( maxHeight > (altRefine+25) ){ //pelican
             LogWrite(3);    
             brake = false;
-            while(pos > 35){
-                ServoFunction(); 
-                delay(50);
-                WriteData();
-            }
+            ServoFunction(); 
     
             while(true){        //brakes closed, flight data will be logged until computer is turned off
                 UpdateData();
@@ -461,7 +452,7 @@ void EndGame(){
     }
   }  
 }
-}
+
 
 void UpdateData(){
   
@@ -477,10 +468,11 @@ void UpdateData(){
   velocity += Integrate(OldTime, time, Ax); //Integrating to get new velocity  
 // ServoTest();
 
-// Serial.print("   alt:"); Serial.print(altRefine);
-// Serial.print(  "Ax: "); Serial.print(Ax, 4);
-// Serial.print("   velocity:"); Serial.print(velocity, 4);
-// Serial.print(  "totalv: "); Serial.println("");
+ Serial.print("   alt:"); Serial.print(altRefine);
+ Serial.print(  "Ax: "); Serial.print(Ax, 4);
+  Serial.print(  "Ax: "); Serial.print(Ax + correction, 4);
+ Serial.print("   velocity:"); Serial.println(velocity, 4);
+ 
  delay(500);
   
   OldTime=time;   // ms, reassigns time for lower bound at next integration cycle (move this to top of loop to eliminate any time delays between time and oldTime to have a better integration and derivation?)

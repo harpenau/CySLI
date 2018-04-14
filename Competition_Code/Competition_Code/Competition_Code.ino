@@ -289,10 +289,10 @@ void Resetms5611(){
 //--------------------------------------------------------------------MPU 6050 Methods--------------------------------------------------
 void GetAcc(){
    mpu.getAcceleration(&accX, &accY, &accZ);
-//   accX = map(accX, 0, 4096, 0, 32);
-//   accY = map(accY, 0, 4096, 0, 32)-32; //if y is pointing up (or usb port) subtract 31
-//   accZ = map(accZ, 0, 4096, 0, 32); //pelican
-     accY = accY / 2048;
+   accX = map(accX, 0, 2048, 0, 32);
+   accY = map(accY, 0, 2048, 0, 32)-32; //if y is pointing up (or usb port) subtract 31
+   accZ = map(accZ, 0, 2048, 0, 32); //pelican
+ 
    /* Each 16-bit accelerometer measurement has a full scale defined in ACCEL_FS
  * (Register 28). For each full scale setting, the accelerometers' sensitivity
  * per LSB in ACCEL_xOUT is shown in the table below:
@@ -382,7 +382,7 @@ double Integrate(unsigned long prevTime, unsigned long currTime, double val) {
   /*function requires two times, and one data point
   DESIGNED FOR ACCELERATION INEGRATION ONLY*/
   
-  return val*(currTime-prevTime)/1000.0; //computes and returns Area, the result of the integration
+  return val*((currTime-prevTime)/1000.0); //computes and returns Area, the result of the integration
 } 
   
 double Derive(unsigned long OldTime, unsigned long time, double altPrev, double altRefine){
@@ -473,12 +473,10 @@ void UpdateData(){
   altRefine = Kalman(altitude, altPrev, &PnextAlt);
   accRefine = Kalman(accY, AccPrev, &PnextAcc);
   
-  velIntegral += Integrate(OldTime, time, accRefine); //Integrating to get new velocity  
-  velDerive = Derive(OldTime, time, altPrev, altRefine);
-  velocity = Kalman( (velDerive + velIntegral)/2, velPrev, &PnextVel);
+  velocity += Integrate(OldTime, time, accRefine); //Integrating to get new velocity  
   
   //ServoTest();
-  //SerialTest();
+  SerialTest();
   OldTime=time;         // reassigns time for next integration cycle (move this to top of loop to eliminate any time delays between time and oldTime to have a better integration and derivation?)
   AccPrev=accRefine;            // reassigns accRefine for initial acceleration at next integration cycle and kalman
   altPrev=altRefine;    // reassigns altRefine for initial altitude at next derivation and kalman
@@ -506,10 +504,11 @@ void SerialTest(){
 
  /*For debugging, uncomment desired variables and call within UpdateData()*/
 
-  Serial.print("rawAlt: "); Serial.print(altitude); Serial.print(",");
-  Serial.print("AltRefine: "); Serial.print(altRefine); Serial.print(",");
-  Serial.print("AccRefine: "); Serial.print(accRefine); Serial.print(",");
-  Serial.print("Velocity: "); Serial.print(velocity); Serial.print(",");
+  Serial.print("rawAlt: "); Serial.print(altitude); Serial.print(" ,");
+  Serial.print("AltRefine: "); Serial.print(altRefine); Serial.print(" ,");
+  Serial.print("accY: "); Serial.print(accY); Serial.print(" , ");
+  Serial.print("AccRefine: "); Serial.print(accRefine); Serial.print(" ,");
+  Serial.print("Velocity: "); Serial.print(velocity); Serial.print(" ,");
   
   Serial.println(""); // prints new line
   delay(500);         // optional delay of output

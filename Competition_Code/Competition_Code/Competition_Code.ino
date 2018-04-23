@@ -28,8 +28,8 @@
 
 #define g 32.174    // gravity, ft/s^2
 #define CDCLOSED 0.7  //The coefficient of drag when the air brakes are closed 
-#define AREACLOSED 0.25  //The area of the rocket when the air brakes are closed, ft^2
-#define FINALHEIGHT 5280.0  //Final height we want rocket to reach at apogee, in ft
+#define AREACLOSED 0.25  //The frontal area of the rocket when the air brakes are closed, ft^2
+#define FINALHEIGHT 5280.0  //Apogee we want rocket to reach, in ft
 #define AIRDENSITY 0.0023 //Air density of launch field, lb/(g*ft^3)
 #define MASS 3   //Mass of the rocket, lb/g
 
@@ -39,20 +39,20 @@ bool burnout = false; //current status of motor (false = motor active)
 bool brake = false; //status of the brakes (false = closing, true = opening)
 
 //These are not all on the same line to comment them
-double AccPrev = 0;      // previous x acceleration
-double PnextAcc = 0;     // prediction of next x acceleration for kalman filter, used exclusively in the kalman function
-double PnextAlt = 0;    // prediction of next altitude for kalman filter, used exclusively in the kalman function
-double PnextVel = 0;    // prediction of next velocity for kalman filter
-double altPrev = 0;     // saved altitude from previous loop, ft
+double AccPrev = 0;      // previous vertical acceleration
+double PnextAcc = 0;     // prediction of next vertical acceleration for kalman filter, used exclusively in the kalman function
+double PnextAlt = 0;     // prediction of next altitude for kalman filter, used exclusively in the kalman function
+double PnextVel = 0;     // prediction of next velocity for kalman filter, ft/s
+double altPrev = 0;      // saved altitude from previous loop, ft
 double velPrev = 0;
-double altRefine = 0;   // smoothed altitude, ft
-double accRefine = 0;          // smoothed vertical acceleration, ft/s^2
-double velIntegral = 0; // integrated velocity from vertical acceleration, ft/s
-double velDerive = 0;   // derivated velocity from altitude, ft/s
-double velocity = 0;    // averaged velocity, ft/s
-double baseline;        // baseline pressure, taken during IMU setup
-double maxHeight = 0;   // current max height the rocket has reached in current flight, ft
-double projHeight = 0;
+double altRefine = 0;    // filtered altitude, ft
+double accRefine = 0;    // filtered vertical acceleration, ft/s^2
+double velIntegral = 0;  // integrated velocity from vertical acceleration, ft/s
+double velDerive = 0;    // derivated velocity from altitude, ft/s
+double velocity = 0;     // averaged velocity, ft/s
+double baseline;         // baseline pressure, taken during IMU setup
+double maxHeight = 0;    // current max height the rocket has reached in current flight, ft
+double projHeight = 0;   // predicted agpogee, ft
 
 unsigned long time=0;     // current time, ms
 unsigned long OldTime=0;  // time from previous loop, ms
@@ -61,13 +61,13 @@ static NMEAGPS  gps;  //gps variables
 static gps_fix  fix;
 
 //Objects
-MS5611 ms5611;
-MPU6050 mpu;
+MS5611 ms5611;      //IMU1
+MPU6050 mpu;        //IMU2
 Servo servo;        // airbrake servo
 File dataFile;      // the datafile variable to save stuff to microSD
 
 //MPU 6050 Accelerations
-int16_t accX, accY, accZ;   // unfiltered accelerations, ft/s^2
+int16_t accX, accY, accZ;   // raw accelerations, ft/s^2
 
 //ms5611 Altitude
 double altitude;  //raw altitude, ft
@@ -356,17 +356,16 @@ double ApogeePrediction(double vel){
   /*Predicts apopgee from current velocity, deploys brakes
     if needed. CAN ONLY BE USED AFTER BURNOUT  */
   //all heights are in ft
-  //double vel    //current filtered velocity
-  //double projHeight;        //The projected final height with no air brakes at this moment in time
-  //double k ;           //Drag to be used to calculate projHeight
+  //double vel              //current velocity
+  //double projHeight;      //The projected final height with no air brakes at this moment in time
+  //double k ;              //Drag to be used to calculate projHeight
 
   //Calcualtes projectedHeight
   double k = 0.5 * AREACLOSED * CDCLOSED * AIRDENSITY; //from old code, check constants
   
   projHeight = (MASS / (2.0 * k)) * log(((MASS * g) +(k * vel * vel)) / (MASS * g)) + altRefine;
-  //If projectedHeight will surpass desiredFinalHeight
   
-  if (projHeight > (FINALHEIGHT + 30) ) //error of 30ft, pelican
+  if (projHeight > (FINALHEIGHT + 15) ) //error of 30ft, pelican
   {
     brake = true;
   }
@@ -399,7 +398,7 @@ void Burnout(){
   UpdateData();
   UpdateData(); //these calibrate the prev values for filtering
   
-  while(accRefine < 30){ // simple launch detection using vertical acc, 100% necessary for test flight/competition
+  while(accRefine < 30){ // simple launch detection using vertical acc, 100% necessary for real flights
     UpdateData();
     //WriteData();  // uncomment if data before launch is needed
   }
@@ -413,7 +412,7 @@ void Burnout(){
       burnout = true;
   }
   
-  LogWrite(7);
+  LogWrite(7);  //writes burnout event to datalog
  // Serial.println(F("leaving Burnout"));
 }
 
@@ -429,7 +428,7 @@ void EndGame(){
       ServoFunction(); //closes brakes since we set brake to false
       WriteData();
     
-      while(true){        //brakes closed, flight data will be logged until computer is turned off
+      while(true){        //flight data will be logged until computer is turned off
         UpdateData();
         WriteData();
         GPSloop();
@@ -451,7 +450,7 @@ void EndGame(){
             brake = false;
             ServoFunction(); 
     
-            while(true){        //brakes closed, flight data will be logged until computer is turned off
+            while(true){        //flight data will be logged until computer is turned off
                 UpdateData();
                 WriteData();
                 GPSloop();
@@ -460,7 +459,6 @@ void EndGame(){
     }
   }  
 }
-
 
 void UpdateData(){
   
@@ -472,17 +470,17 @@ void UpdateData(){
 
   altRefine = Kalman(altitude, altPrev, &PnextAlt);
   accRefine = Kalman(accY, AccPrev, &PnextAcc);
-  
   velocity += Integrate(OldTime, time, accRefine); //Integrating to get new velocity  
   
   //ServoTest();
   SerialTest();
-  OldTime=time;         // reassigns time for next integration cycle (move this to top of loop to eliminate any time delays between time and oldTime to have a better integration and derivation?)
-  AccPrev=accRefine;            // reassigns accRefine for initial acceleration at next integration cycle and kalman
-  altPrev=altRefine;    // reassigns altRefine for initial altitude at next derivation and kalman
-  velPrev = velocity;
   
-  if(altRefine > maxHeight)
+  OldTime=time;         // reassigns time for next integration cycle (move this to top of loop to eliminate any time delays between time and oldTime to have a better integration and derivation?)
+  AccPrev=accRefine;    // reassigns accRefine for initial acceleration at next integration cycle and kalman
+  altPrev=altRefine;    // reassigns altRefine for initial altitude at next derivation and kalman
+  velPrev = velocity;   // saves velocity for next kalman cycle
+  
+  if(altRefine > maxHeight) //keep max height stored for apogee confirmation
     maxHeight = altRefine;
 }
 
@@ -502,9 +500,11 @@ void ServoTest(){
 
 void SerialTest(){
 
- /*For debugging, uncomment desired variables and call within UpdateData()*/
+ /*For debugging, uncomment desired variables and 
+     call this function within UpdateData()*/
 
   Serial.print("rawAlt: "); Serial.print(altitude); Serial.print(" ,");
+   /*Serial.print("rawAlt: "); */Serial.print(altitude); Serial.print(" ,");
   Serial.print("AltRefine: "); Serial.print(altRefine); Serial.print(" ,");
   Serial.print("accY: "); Serial.print(accY); Serial.print(" , ");
   Serial.print("AccRefine: "); Serial.print(accRefine); Serial.print(" ,");

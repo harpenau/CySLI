@@ -64,6 +64,7 @@ double maxHeight = 0;   // current max height the rocket has reached in current 
 double projHeight = 0;
 double aCorrect = 0;
 double altCorrect = 0;
+
 unsigned long time=0;     // current time, ms
 unsigned long OldTime=0;  // time from previous loop, ms
 

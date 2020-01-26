@@ -1,26 +1,11 @@
-// formatting rules:
-// 1) { on same line as statement
-//   ex: if (condition) {
-// 2) multicomment lines go above line
-//  ex: // comment
-//      // comment continued
-//      variable = 0;
-// 3) single line comments on same line, tabbed and spaced
-//  ex: variable = 0; // comment
-// 4) for function:what it does, name inputs and outputs with definition
-//  ex: see ApogeePrediction()
-// 5) variables have camel case starting with lowercase
-//  ex: helloWorld = 0;
-// 6) functions have camel case starting with uppercase
-//  ex: HelloWorld()
-
 #include <I2Cdev.h>   // provides simple and intuitive interfaces to I2C devices
-#include <MPU6050.h>  // IMU library
+#include <MPU6050.h> 
 #include <Wire.h>   // allows you to communicate with I2C / TWI devices
-#include <Servo.h>    // servo library
 #include <SPI.h>    // Serial Peripheral Interface(SPI) used for communicating with one or more peripheral devices quickly over short distances
 #include <SD.h>     // microSD card library
 #include <MS5611.h>
+#include <ServoTimer2.h>
+// gps libraries
 #include <NMEAGPS.h>
 #include <GPSport.h>
 #include <Streamers.h>
@@ -59,7 +44,7 @@ static gps_fix  fix;
 MS5611 ms5611;
 
 MPU6050 mpu;
-Servo servo;        //airbrake servo
+ServoTimer2 servo;        //airbrake servo
 File dataFile;      // the datafile variable to save stuff to microSD
 
 //MPU 6050 Accelerations
@@ -497,4 +482,3 @@ void ServoTest(){
   delay(100);
 
 }
-
